@@ -12,6 +12,7 @@ require('./models/User');
 const Chat = require('./models/Chat'); // مدل جدید
 const Message = require('./models/Message'); // مدل جدید
 const ChatMember = require('./models/ChatMember'); // مدل جدید
+const defineAssociations = require('./models/associations');
 
 // Import روت‌ها
 const authRoutes = require('./routes/authRoutes');
@@ -28,6 +29,9 @@ const io = new Server(server, { // مقداردهی اولیه Socket.IO با س
 });
 
 const PORT = process.env.PORT || 3000;
+
+// فراخوانی تابع برای تعریف روابط
+defineAssociations();
 
 // اتصال به پایگاه داده
 connectDB();
