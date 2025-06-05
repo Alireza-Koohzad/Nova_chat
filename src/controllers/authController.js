@@ -57,3 +57,38 @@ exports.registerUser = async (req, res) => {
     }
 };
 
+// @desc    Authenticate user & get token (Login)
+// @route   POST /api/auth/login
+// @access  Public
+exports.loginUser = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { login, password } = req.body; // login می‌تواند email یا username باشد
+
+    try {
+        let user = await User.findOne({ where: { email: login } });
+        if (!user) {
+            user = await User.findOne({ where: { username: login } });
+        }
+
+        if (!user || !(await user.isValidPassword(password))) {
+            return res.status(401).json({ success: false, message: 'Invalid credentials' });
+        }
+
+        const token = generateToken(user.id);
+        const userResponse = user.toJSON();
+        delete userResponse.password;
+
+        res.json({
+            success: true,
+            token,
+            user: userResponse,
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ success: false, message: 'Server error during login' });
+    }
+};
