@@ -3,8 +3,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const http = require('http'); // ماژول http خود Node.js
-const { Server } = require('socket.io'); // Server از socket.io
-const { connectDB, sequelize } = require('./config/database');
+const {Server} = require('socket.io'); // Server از socket.io
+const {connectDB, sequelize} = require('./config/database');
 const setupSwagger = require('./config/swagger');
 
 // Import مدل‌ها
@@ -39,7 +39,7 @@ connectDB();
 // Middleware ها
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({extended: true}));
 
 setupSwagger(app);
 
@@ -55,12 +55,12 @@ app.use('/api/chats', chatRoutes); // استفاده از روت‌های چت
 // Middleware برای مدیریت خطاهای عمومی
 app.use((err, req, res, next) => {
     console.error(err.stack);
-    res.status(500).send({ success: false, message: 'Something broke!', error: err.message });
+    res.status(500).send({success: false, message: 'Something broke!', error: err.message});
 });
 
 // ** منطق Socket.IO **
 // یک middleware برای احراز هویت کاربران Socket.IO
-const { verifySocketToken } = require('./middleware/socketAuthMiddleware'); // این فایل را ایجاد خواهیم کرد
+const {verifySocketToken} = require('./middleware/socketAuthMiddleware'); // این فایل را ایجاد خواهیم کرد
 io.use(verifySocketToken);
 
 
@@ -69,6 +69,76 @@ io.on('connection', (socket) => {
 
     // پیوستن به روم شخصی کاربر (برای نوتیفیکیشن‌های مستقیم و غیره)
     socket.join(socket.userId);
+
+    socket.on('markMessagesAsRead', async (data) => {
+        // data: { chatId: string, lastSeenMessageId?: string }
+        // lastSeenMessageId آی دی آخرین پیامی است که کاربر دیده.
+        // اگر ارسال نشود، فرض می کنیم تمام پیام های آن چت را خوانده
+        const {chatId, lastSeenMessageId} = data;
+        const readerUserId = socket.userId;
+
+        try {
+            const chatMember = await ChatMember.findOne({where: {chatId, userId: readerUserId}});
+            if (!chatMember) {
+                return socket.emit('readError', {message: "You are not a member of this chat."});
+            }
+
+            // ۱. آپدیت lastReadMessageId در جدول ChatMember
+            // اگر lastSeenMessageId داده شده، آن را ست کن. در غیر این صورت، آخرین پیام چت را بگیر و ست کن.
+            let finalLastReadMessageId = lastSeenMessageId;
+            if (!finalLastReadMessageId) {
+                const lastMessageInChat = await Message.findOne({
+                    where: {chatId},
+                    order: [['createdAt', 'DESC']],
+                    attributes: ['id']
+                });
+                if (lastMessageInChat) {
+                    finalLastReadMessageId = lastMessageInChat.id;
+                }
+            }
+
+            if (finalLastReadMessageId) {
+                // فقط اگر پیام جدیدتری خوانده شده، آپدیت کن
+                let updateNeeded = true;
+                if (chatMember.lastReadMessageId) {
+                    // مقایسه زمانی پیام ها برای اطمینان از اینکه پیام جدیدتری خوانده شده
+                    // این بخش می تواند با مقایسه مستقیم ID ها (اگر UUID ها ترتیب زمانی داشته باشند) یا timestamp ها انجام شود
+                    // برای سادگی، فعلا هر بار آپدیت می کنیم اگر finalLastReadMessageId معتبر باشد
+                    // و متفاوت از قبلی باشد.
+                    if (chatMember.lastReadMessageId === finalLastReadMessageId) updateNeeded = false;
+                }
+
+                if (updateNeeded) {
+                    await chatMember.update({lastReadMessageId: finalLastReadMessageId});
+                    console.log(`User ${readerUserId} marked messages as read in chat ${chatId} up to ${finalLastReadMessageId}`);
+                }
+            }
+
+
+            // ۲. به کاربر(های) دیگر در چت اطلاع بده که پیام‌ها توسط این کاربر خوانده شده‌اند.
+            // این اطلاعات برای نمایش "Read by X" یا تیک دوم آبی مفید است.
+            const chat = await Chat.findByPk(chatId, {include: [{model: ChatMember, as: 'ChatMembers'}]});
+            if (chat) {
+                chat.ChatMembers.forEach(member => {
+                    // به همه اعضای دیگر (به جز خود خواننده) اطلاع بده
+                    if (member.userId !== readerUserId) {
+                        io.to(member.userId).emit('messagesReadByRecipient', {
+                            chatId: chatId,
+                            readerId: readerUserId,
+                            lastReadMessageId: finalLastReadMessageId // یا همه پیام های خوانده شده
+                        });
+                    }
+                });
+                // همچنین به خود خواننده هم یک تاییدیه بفرست (اختیاری)
+                socket.emit('messagesSuccessfullyMarkedAsRead', {chatId, lastReadMessageId: finalLastReadMessageId});
+            }
+
+        } catch (error) {
+            console.error('Error marking messages as read:', error);
+            socket.emit('readError', {message: "Error processing read status."});
+        }
+    });
+
 
     // رویداد برای پیوستن به یک چت خاص
     socket.on('joinChat', (chatId) => {
@@ -87,13 +157,13 @@ io.on('connection', (socket) => {
         // data: { chatId: string, content: string, tempId?: string }
         // tempId یک شناسه موقت از سمت کلاینت برای پیگیری پیام قبل از ذخیره در دیتابیس است
         try {
-            const { chatId, content, tempId } = data;
+            const {chatId, content, tempId} = data;
             const senderId = socket.userId;
 
             // ۱. بررسی اینکه آیا کاربر عضو چت هست (برای امنیت بیشتر)
-            const chatMember = await ChatMember.findOne({ where: { chatId, userId: senderId } });
+            const chatMember = await ChatMember.findOne({where: {chatId, userId: senderId}});
             if (!chatMember) {
-                socket.emit('messageError', { tempId, message: "You are not a member of this chat." });
+                socket.emit('messageError', {tempId, message: "You are not a member of this chat."});
                 return;
             }
 
@@ -104,6 +174,7 @@ io.on('connection', (socket) => {
                 content, // فعلا فقط متنی
                 contentType: 'text',
             });
+            await Chat.update({lastMessageId: message.id}, {where: {id: chatId}});
 
             const messageData = message.toJSON();
             // افزودن اطلاعات فرستنده به پیام (می‌تواند از User.findByPk انجام شود)
@@ -112,31 +183,47 @@ io.on('connection', (socket) => {
 
 
             // ۳. ارسال پیام به تمام اعضای چت (در روم مربوطه)
-            io.to(chatId).emit('newMessage', { ...messageData, tempId }); // ارسال tempId برای تطبیق در کلاینت
+            io.to(chatId).emit('newMessage', {...messageData, tempId}); // ارسال tempId برای تطبیق در کلاینت
 
             // (اختیاری) ارسال وضعیت Delivered به فرستنده (یا به همه، اگر پیام به گیرنده خاصی رسید)
             // این بخش پیچیده‌تر می‌شود وقتی که بخواهیم وضعیت Delivered را برای هر گیرنده جداگانه پیگیری کنیم.
             // برای چت خصوصی:
-            const chat = await Chat.findByPk(chatId, { include: [ChatMember] });
+            const chat = await Chat.findByPk(chatId, {
+                include: [{model: ChatMember, as: 'ChatMembers'}] // اطمینان از بارگذاری ChatMembers
+            });
             if (chat && chat.type === 'private') {
-                const otherMember = chat.ChatMembers.find(member => member.userId !== senderId);
+                const otherMember = chat.ChatMembers.find(cm => cm.userId !== senderId);
                 if (otherMember) {
-                    // به روم شخصی کاربر دیگر پیام delivered بفرست اگر آنلاین است
-                    io.to(otherMember.userId).emit('messageDelivered', { messageId: message.id, chatId });
+                    // بررسی اینکه آیا کاربر دیگر آنلاین است (یعنی سوکتی با userId او متصل است)
+                    const recipientSockets = await io.in(otherMember.userId).fetchSockets();
+                    if (recipientSockets.size > 0) {
+                        // اگر گیرنده آنلاین است، رویداد delivered را به فرستنده اصلی بفرست
+                        // فرستنده اصلی در روم شخصی خودش است
+                        io.to(senderId).emit('messageStatusUpdate', {
+                            messageId: message.id,
+                            chatId: chatId,
+                            status: 'delivered',
+                            recipientId: otherMember.userId // برای اینکه فرستنده بداند برای کدام کاربر delivered شده
+                        });
+                        console.log(`Message ${message.id} delivered to user ${otherMember.userId}`);
+                    } else {
+                        // گیرنده آفلاین است، وضعیت delivered بعدا هنگام اتصال ارسال می شود یا در دیتابیس ذخیره می شود
+                        console.log(`Recipient ${otherMember.userId} is offline. Message ${message.id} stored.`);
+                    }
                 }
             }
         } catch (error) {
             console.error('Error sending message:', error);
-            socket.emit('messageError', { tempId: data.tempId, message: "Error sending message" });
+            socket.emit('messageError', {tempId: data.tempId, message: "Error sending message"});
         }
     });
 
     // رویداد برای نشانگر "در حال تایپ"
     socket.on('typing', (data) => {
         // data: { chatId: string, isTyping: boolean }
-        const { chatId, isTyping } = data;
+        const {chatId, isTyping} = data;
         // ارسال به همه کاربران در چت به جز خود فرستنده
-        socket.to(chatId).emit('typing', { userId: socket.userId, chatId, isTyping });
+        socket.to(chatId).emit('typing', {userId: socket.userId, chatId, isTyping});
     });
 
 
@@ -151,7 +238,7 @@ io.on('connection', (socket) => {
 // همگام‌سازی پایگاه داده و راه‌اندازی سرور
 const startServer = async () => {
     try {
-        await sequelize.sync({ alter: true });
+        await sequelize.sync({alter: true});
         console.log('Database synchronized successfully.');
 
         server.listen(PORT, () => { // به جای app.listen از server.listen استفاده کنید
