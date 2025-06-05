@@ -51,13 +51,14 @@ User.init(
             type: DataTypes.STRING,
             allowNull: true,
         },
-        // status: { // برای فازهای بعدی
-        //   type: DataTypes.ENUM('online', 'offline', 'away'),
-        //   defaultValue: 'offline',
-        // },
-        // lastSeenAt: { // برای فازهای بعدی
-        //   type: DataTypes.DATE,
-        // },
+        status: {
+            type: DataTypes.ENUM('online', 'offline'),
+            defaultValue: 'offline',
+        },
+        lastSeenAt: {
+            type: DataTypes.DATE,
+            defaultValue: DataTypes.NOW,
+        },
     },
     {
         sequelize,
