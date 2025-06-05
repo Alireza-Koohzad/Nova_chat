@@ -1,10 +1,10 @@
 // src/controllers/chatController.js
-const { Op } = require('sequelize');
+const {Op} = require('sequelize');
 const Chat = require('../models/Chat');
 const User = require('../models/User');
 const Message = require('../models/Message');
 const ChatMember = require('../models/ChatMember');
-const { sequelize } = require('../config/database'); // برای تراکنش‌ها
+const {sequelize} = require('../config/database'); // برای تراکنش‌ها
 
 // Helper function to format chat response
 const formatChatResponse = async (chat, currentUserId) => {
@@ -37,7 +37,13 @@ const formatChatResponse = async (chat, currentUserId) => {
         // اگر lastMessageId ست شده ولی خود پیام لود نشده
         // این حالت نباید زیاد پیش بیاید اگر include درست باشد
         if (chat.lastMessageId) {
-            const lastMsg = await Message.findByPk(chat.lastMessageId, { include: [{ model: User, as: 'sender', attributes: ['id', 'username', 'displayName']}] });
+            const lastMsg = await Message.findByPk(chat.lastMessageId, {
+                include: [{
+                    model: User,
+                    as: 'sender',
+                    attributes: ['id', 'username', 'displayName']
+                }]
+            });
             if (lastMsg) {
                 chatJSON.lastMessage = lastMsg.toJSON();
             }
@@ -56,6 +62,31 @@ const formatChatResponse = async (chat, currentUserId) => {
             // role: m.ChatMember.role, // اگر اطلاعات ChatMember هم include شده باشد
         }));
     }
+    if (chatJSON.members && chat.ChatMembers) { // ChatMembers باید از include اصلی بیاید
+        const currentUserMembership = chat.ChatMembers.find(cm => cm.userId === currentUserId);
+        if (currentUserMembership && chat.lastMessageId) {
+            // محاسبه تعداد پیام‌های خوانده نشده
+            // این یک روش ساده است. برای دقت بیشتر باید تاریخ پیام‌ها را مقایسه کرد.
+            // یا تعداد پیام‌های جدیدتر از lastReadMessageId را شمرد.
+            if (currentUserMembership.lastReadMessageId !== chat.lastMessageId) {
+                // برای شمارش دقیق، باید کوئری بزنیم
+                const unreadCount = await Message.count({
+                    where: {
+                        chatId: chat.id,
+                        createdAt: {
+                            [Op.gt]: (await Message.findByPk(currentUserMembership.lastReadMessageId || '00000000-0000-0000-0000-000000000000')).createdAt || new Date(0)
+                        } // پیام های جدیدتر از آخرین پیام خوانده شده
+                        // یا اگر lastReadMessageId نال است، همه پیام‌ها
+                    }
+                });
+                chatJSON.unreadCount = unreadCount;
+            } else {
+                chatJSON.unreadCount = 0;
+            }
+        } else {
+            chatJSON.unreadCount = 0; // اگر آخرین پیامی وجود نداشته باشد یا کاربر عضو نباشد
+        }
+    }
 
 
     return chatJSON;
@@ -73,18 +104,38 @@ exports.getUserChats = async (req, res) => {
                 {
                     model: User,
                     as: 'members',
-                    where: { id: userId }, // فقط چت‌هایی که کاربر عضو آنهاست
-                    attributes: ['id', 'username', 'displayName', 'profileImageUrl'], // اطلاعات اعضا
-                    through: { attributes: [] } // از آوردن اطلاعات جدول واسط ChatMember در اینجا خودداری کن
+                    // where: { id: userId }, // این where باعث می شود فقط چت هایی که کاربر عضو آن هاست بیاید، ولی اطلاعات سایر اعضا را هم می خواهیم
+                    attributes: ['id', 'username', 'displayName', 'profileImageUrl'],
+                    through: {attributes: []}
+                },
+                { // این را اضافه می کنیم تا بتوانیم به lastReadMessageId دسترسی داشته باشیم
+                    model: ChatMember,
+                    as: 'ChatMembers', // این as باید با چیزی که در Chat.hasMany(ChatMember) تعریف شده مطابقت داشته باشد
+                    where: {userId: userId}, // اطلاعات عضویت فقط برای کاربر فعلی
+                    required: true // اطمینان از اینکه کاربر عضو چت است
                 },
                 {
                     model: Message,
-                    as: 'lastMessage', // آخرین پیام چت
-                    include: [{ model: User, as: 'sender', attributes: ['id', 'username', 'displayName']}]
+                    as: 'lastMessage',
+                    include: [{model: User, as: 'sender', attributes: ['id', 'username', 'displayName']}]
                 }
             ],
+            // include: [
+            //     {
+            //         model: User,
+            //         as: 'members',
+            //         where: {id: userId}, // فقط چت‌هایی که کاربر عضو آنهاست
+            //         attributes: ['id', 'username', 'displayName', 'profileImageUrl'], // اطلاعات اعضا
+            //         through: {attributes: []} // از آوردن اطلاعات جدول واسط ChatMember در اینجا خودداری کن
+            //     },
+            //     {
+            //         model: Message,
+            //         as: 'lastMessage', // آخرین پیام چت
+            //         include: [{model: User, as: 'sender', attributes: ['id', 'username', 'displayName']}]
+            //     }
+            // ],
             order: [
-                [{ model: Message, as: 'lastMessage' }, 'createdAt', 'DESC'], // مرتب‌سازی بر اساس آخرین پیام
+                [{model: Message, as: 'lastMessage'}, 'createdAt', 'DESC'], // مرتب‌سازی بر اساس آخرین پیام
                 ['updatedAt', 'DESC'] // اگر آخرین پیام نداشت، بر اساس آپدیت چت
             ], // مرتب سازی بر اساس آخرین پیام
         });
@@ -97,7 +148,7 @@ exports.getUserChats = async (req, res) => {
 
     } catch (error) {
         console.error('Error fetching user chats:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({success: false, message: 'Server error'});
     }
 };
 
@@ -106,16 +157,16 @@ exports.getUserChats = async (req, res) => {
 // @access  Private
 exports.createOrGetPrivateChat = async (req, res) => {
     const senderId = req.user.id;
-    const { recipientId } = req.params;
+    const {recipientId} = req.params;
 
     if (senderId === recipientId) {
-        return res.status(400).json({ success: false, message: "Cannot create a chat with yourself." });
+        return res.status(400).json({success: false, message: "Cannot create a chat with yourself."});
     }
 
     try {
         const recipient = await User.findByPk(recipientId);
         if (!recipient) {
-            return res.status(404).json({ success: false, message: 'Recipient user not found.' });
+            return res.status(404).json({success: false, message: 'Recipient user not found.'});
         }
 
         // پیدا کردن چت خصوصی موجود بین دو کاربر
@@ -141,13 +192,13 @@ exports.createOrGetPrivateChat = async (req, res) => {
 
         // راه حل ساده تر (ولی ممکن است برای دیتابیس های خیلی بزرگ بهینه نباشد):
         const userChats = await Chat.findAll({
-            where: { type: 'private' },
+            where: {type: 'private'},
             include: [
                 {
                     model: User,
                     as: 'members',
                     attributes: ['id'],
-                    through: { attributes: [] }
+                    through: {attributes: []}
                 }
             ]
         });
@@ -166,8 +217,12 @@ exports.createOrGetPrivateChat = async (req, res) => {
             // اگر چت موجود بود، اطلاعات کامل آن را برگردان
             const detailedChat = await Chat.findByPk(foundChat.id, {
                 include: [
-                    { model: User, as: 'members', attributes: ['id', 'username', 'displayName', 'profileImageUrl'] },
-                    { model: Message, as: 'lastMessage', include: [{ model: User, as: 'sender', attributes: ['id', 'username', 'displayName']}] }
+                    {model: User, as: 'members', attributes: ['id', 'username', 'displayName', 'profileImageUrl']},
+                    {
+                        model: Message,
+                        as: 'lastMessage',
+                        include: [{model: User, as: 'sender', attributes: ['id', 'username', 'displayName']}]
+                    }
                 ]
             });
             return res.json(await formatChatResponse(detailedChat, senderId));
@@ -176,18 +231,18 @@ exports.createOrGetPrivateChat = async (req, res) => {
         // اگر چت موجود نبود، یکی جدید ایجاد کن (در یک تراکنش)
         const t = await sequelize.transaction();
         try {
-            const newChat = await Chat.create({ type: 'private' }, { transaction: t });
+            const newChat = await Chat.create({type: 'private'}, {transaction: t});
             await ChatMember.bulkCreate([
-                { chatId: newChat.id, userId: senderId },
-                { chatId: newChat.id, userId: recipientId },
-            ], { transaction: t });
+                {chatId: newChat.id, userId: senderId},
+                {chatId: newChat.id, userId: recipientId},
+            ], {transaction: t});
 
             await t.commit();
 
             // اطلاعات کامل چت جدید را برگردان
             const detailedNewChat = await Chat.findByPk(newChat.id, {
                 include: [
-                    { model: User, as: 'members', attributes: ['id', 'username', 'displayName', 'profileImageUrl'] },
+                    {model: User, as: 'members', attributes: ['id', 'username', 'displayName', 'profileImageUrl']},
                     // در ابتدا lastMessage وجود ندارد
                 ]
             });
@@ -201,7 +256,7 @@ exports.createOrGetPrivateChat = async (req, res) => {
 
     } catch (error) {
         console.error('Error in createOrGetPrivateChat:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({success: false, message: 'Server error'});
     }
 };
 
@@ -209,20 +264,20 @@ exports.createOrGetPrivateChat = async (req, res) => {
 // @route   GET /api/chats/:chatId/messages
 // @access  Private
 exports.getChatMessages = async (req, res) => {
-    const { chatId } = req.params;
+    const {chatId} = req.params;
     const userId = req.user.id;
     const limit = parseInt(req.query.limit) || 20;
     const offset = parseInt(req.query.offset) || 0;
 
     try {
         // ۱. بررسی اینکه کاربر عضو چت است
-        const chatMember = await ChatMember.findOne({ where: { chatId, userId } });
+        const chatMember = await ChatMember.findOne({where: {chatId, userId}});
         if (!chatMember) {
-            return res.status(403).json({ success: false, message: "You are not a member of this chat." });
+            return res.status(403).json({success: false, message: "You are not a member of this chat."});
         }
 
         const messages = await Message.findAll({
-            where: { chatId },
+            where: {chatId},
             include: [
                 {
                     model: User,
@@ -240,7 +295,7 @@ exports.getChatMessages = async (req, res) => {
 
     } catch (error) {
         console.error('Error fetching messages:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        res.status(500).json({success: false, message: 'Server error'});
     }
 };
 
