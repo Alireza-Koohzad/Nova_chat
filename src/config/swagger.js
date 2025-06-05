@@ -61,6 +61,87 @@ const options = {
                             format: 'date-time'
                         }
                     }
+                },
+                MessageResponse: {
+                    type: 'object',
+                    properties: {
+                        id: {type: 'string', format: 'uuid'},
+                        chatId: {type: 'string', format: 'uuid'},
+                        senderId: {type: 'string', format: 'uuid'},
+                        content: {type: 'string'},
+                        contentType: {type: 'string', enum: ['text', 'image', 'video', 'file', 'system']},
+                        fileUrl: {type: 'string', format: 'url', nullable: true},
+                        createdAt: {type: 'string', format: 'date-time'},
+                        updatedAt: {type: 'string', format: 'date-time'},
+                        sender: { // اطلاعات فرستنده
+                            type: 'object',
+                            properties: {
+                                id: {type: 'string', format: 'uuid'},
+                                username: {type: 'string'},
+                                displayName: {type: 'string'},
+                                profileImageUrl: {type: 'string', format: 'url', nullable: true}
+                            }
+                        }
+                    }
+                },
+                ChatMemberResponse: { // اطلاعات یک عضو چت
+                    type: 'object',
+                    properties: {
+                        id: {type: 'string', format: 'uuid'},
+                        username: {type: 'string'},
+                        displayName: {type: 'string'},
+                        profileImageUrl: {type: 'string', format: 'url', nullable: true},
+                        // role: { type: 'string', enum: ['member', 'admin'], description: "Role in group chats" }
+                    }
+                },
+                ChatResponse: { // برای لیست چت‌ها
+                    type: 'object',
+                    properties: {
+                        id: {type: 'string', format: 'uuid'},
+                        type: {type: 'string', enum: ['private', 'group']},
+                        name: {
+                            type: 'string',
+                            nullable: true,
+                            description: "Chat name (for groups, or recipient's name for private chats)"
+                        },
+                        profileImageUrl: {
+                            type: 'string',
+                            format: 'url',
+                            nullable: true,
+                            description: "Group image or recipient's profile image"
+                        },
+                        creatorId: {type: 'string', format: 'uuid', nullable: true},
+                        lastMessage: {
+                            "$ref": "#/components/schemas/MessageResponse",
+                            nullable: true
+                        },
+                        // members: { // نمایش ساده اعضا برای لیست چت‌ها
+                        //     type: 'array',
+                        //     items: { "$ref": "#/components/schemas/ChatMemberResponse" }
+                        // },
+                        recipientId: {
+                            type: 'string',
+                            format: 'uuid',
+                            nullable: true,
+                            description: "ID of the other user in a private chat"
+                        },
+                        createdAt: {type: 'string', format: 'date-time'},
+                        updatedAt: {type: 'string', format: 'date-time'},
+                    }
+                },
+                ChatDetailResponse: { // برای نمایش جزئیات یک چت خاص
+                    allOf: [ // ارث‌بری از ChatResponse
+                        {"$ref": "#/components/schemas/ChatResponse"},
+                        {
+                            type: 'object',
+                            properties: {
+                                members: { // اطلاعات کامل‌تر اعضا
+                                    type: 'array',
+                                    items: {"$ref": "#/components/schemas/ChatMemberResponse"}
+                                }
+                            }
+                        }
+                    ]
                 }
             }
         },
