@@ -1,6 +1,6 @@
 // src/routes/userRoutes.js
 const express = require('express');
-const { updateMyProfile } = require('../controllers/userController');
+const { updateMyProfile , searchUsers } = require('../controllers/userController');
 const { protect } = require('../middleware/authMiddleware');
 const { updateProfileValidation } = require('../middleware/validators');
 const router = express.Router();
@@ -52,5 +52,8 @@ const router = express.Router();
  *         description: Not authorized
  */
 router.put('/me', protect, updateProfileValidation, updateMyProfile);
+
+router.get('/search', protect, searchUsers); // اضافه کردن روت جستجو
+
 
 module.exports = router;

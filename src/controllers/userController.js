@@ -41,6 +41,31 @@ exports.updateMyProfile = async (req, res) => {
     }
 };
 
+exports.searchUsers = async (req, res) => {
+    const query = req.query.q || '';
+    if (query.length < 2) {
+        return res.json({ success: true, data: [] });
+    }
+    try {
+        const users = await User.findAll({
+            where: {
+                [Op.or]: [ // جستجو در نام کاربری یا نام نمایشی
+                    { username: { [Op.iLike]: `%${query}%` } },
+                    { displayName: { [Op.iLike]: `%${query}%` } }
+                ],
+                id: { [Op.ne]: req.user.id } // به جز خود کاربر
+            },
+            attributes: ['id', 'username', 'displayName', 'profileImageUrl'],
+            limit: 10
+        });
+        res.json({ success: true, data: users });
+    } catch (error) {
+        console.error("Error searching users:", error);
+        res.status(500).json({ success: false, message: "Server error during user search" });
+    }
+};
+
+
 // @desc    Get user by ID (برای آینده)
 // @route   GET /api/users/:id
 // @access  Private (یا Public بسته به نیاز)
