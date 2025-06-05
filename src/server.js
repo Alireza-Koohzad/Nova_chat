@@ -64,11 +64,27 @@ const {verifySocketToken} = require('./middleware/socketAuthMiddleware'); // ا�
 io.use(verifySocketToken);
 
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
     console.log(`User connected: ${socket.id}, UserID: ${socket.userId}`); // userId از middleware می‌آید
 
     // پیوستن به روم شخصی کاربر (برای نوتیفیکیشن‌های مستقیم و غیره)
     socket.join(socket.userId);
+
+    try {
+        // ۱. بروزرسانی وضعیت کاربر به 'online' و lastSeenAt
+        await User.update({status: 'online', lastSeenAt: new Date()}, {where: {id: socket.userId}});
+
+        // ۲. به دوستان/مخاطبین آنلاین کاربر اطلاع بده که او آنلاین شده است
+        // (این بخش نیازمند سیستم دوستی است که بعدا اضافه می کنیم. فعلا فرض می کنیم به همه کاربران در چت های مشترک اطلاع می دهیم)
+        // یا یک رویداد کلی تر:
+        socket.broadcast.emit('userStatusChanged', {userId: socket.userId, status: 'online', lastSeenAt: new Date()});
+
+        // ۳. به کلاینت لیست کاربران آنلاین (یا وضعیت دوستانش) را بفرست (اختیاری)
+        // socket.emit('onlineUsersList', await getOnlineFriends(socket.userId));
+
+    } catch (error) {
+        console.error("Error updating user status on connect:", error);
+    }
 
     socket.on('markMessagesAsRead', async (data) => {
         // data: { chatId: string, lastSeenMessageId?: string }
@@ -227,10 +243,33 @@ io.on('connection', (socket) => {
     });
 
 
-    socket.on('disconnect', () => {
-        console.log(`User disconnected: ${socket.id}, UserID: ${socket.userId}`);
-        //  بروزرسانی lastSeenAt در دیتابیس
-        // و اطلاع رسانی به چت‌های فعال کاربر که او آفلاین شده است
+    socket.on('disconnect', async (reason) => { // async اضافه شد
+        console.log(`User disconnected: ${socket.id}, UserID: ${socket.userId}, Reason: ${reason}`);
+
+        try {
+            // بررسی اینکه آیا این آخرین سوکت متصل برای این کاربر است
+            // چون کاربر ممکن است از چندین دستگاه/تب متصل باشد
+            const userSockets = await io.in(socket.userId).allSockets();
+
+            if (userSockets.size === 0) { // اگر این آخرین سوکت بود
+                const disconnectedUserId = socket.userId; // userId را قبل از اینکه socket.userId از بین برود ذخیره کن
+                if (disconnectedUserId) {
+                    await User.update({status: 'offline', lastSeenAt: new Date()}, {where: {id: disconnectedUserId}});
+
+                    // به دیگران اطلاع بده که کاربر آفلاین شده
+                    socket.broadcast.emit('userStatusChanged', {
+                        userId: disconnectedUserId,
+                        status: 'offline',
+                        lastSeenAt: new Date()
+                    });
+                    console.log(`User ${disconnectedUserId} marked as offline.`);
+                }
+            } else {
+                console.log(`User ${socket.userId} still has other active sockets: ${userSockets.size}`);
+            }
+        } catch (error) {
+            console.error("Error updating user status on disconnect:", error);
+        }
     });
 });
 
