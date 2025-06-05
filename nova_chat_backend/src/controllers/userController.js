@@ -1,6 +1,7 @@
 // src/controllers/userController.js
 const User = require('../models/User');
 const { validationResult } = require('express-validator');
+const { Op } = require('sequelize'); // Op را از sequelize ایمپورت کنید
 
 // @desc    Update user profile (displayName, profileImageUrl)
 // @route   PUT /api/users/me
@@ -43,20 +44,22 @@ exports.updateMyProfile = async (req, res) => {
 
 exports.searchUsers = async (req, res) => {
     const query = req.query.q || '';
-    if (query.length < 2) {
+    const currentUserId = req.user.id; // شناسه کاربر لاگین کرده
+
+    if (query.length < 1) { // حداقل ۱ کاراکتر برای جستجو
         return res.json({ success: true, data: [] });
     }
     try {
         const users = await User.findAll({
             where: {
-                [Op.or]: [ // جستجو در نام کاربری یا نام نمایشی
-                    { username: { [Op.iLike]: `%${query}%` } },
+                [Op.or]: [
+                    { username: { [Op.iLike]: `%${query}%` } }, // iLike برای case-insensitive
                     { displayName: { [Op.iLike]: `%${query}%` } }
                 ],
-                id: { [Op.ne]: req.user.id } // به جز خود کاربر
+                id: { [Op.ne]: currentUserId } // به جز خود کاربر لاگین کرده
             },
-            attributes: ['id', 'username', 'displayName', 'profileImageUrl'],
-            limit: 10
+            attributes: ['id', 'username', 'displayName', 'profileImageUrl'], // اطلاعات لازم برای نمایش
+            limit: 10 // محدود کردن نتایج
         });
         res.json({ success: true, data: users });
     } catch (error) {

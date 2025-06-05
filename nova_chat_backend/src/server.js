@@ -10,9 +10,10 @@ const setupSwagger = require('./config/swagger');
 // Import مدل‌ها
 require('./models/User');
 const Chat = require('./models/Chat'); // مدل جدید
+const User = require('./models/User'); // مدل جدید
 const Message = require('./models/Message'); // مدل جدید
 const ChatMember = require('./models/ChatMember'); // مدل جدید
-const defineAssociations = require('./models/associations');
+const defineAssociations = require('./models/Associations');
 
 // Import روت‌ها
 const authRoutes = require('./routes/authRoutes');
@@ -172,6 +173,7 @@ io.on('connection', async (socket) => {
     socket.on('sendMessage', async (data) => {
         // data: { chatId: string, content: string, tempId?: string }
         // tempId یک شناسه موقت از سمت کلاینت برای پیگیری پیام قبل از ذخیره در دیتابیس است
+        console.log(`sendMessage event from socket ID: ${socket.id}, User ID: ${socket.userId}, Chat ID: ${data.chatId}, Content: ${data.content}`);
         try {
             const {chatId, content, tempId} = data;
             const senderId = socket.userId;

@@ -1,0 +1,311 @@
+/* css/style.css */
+body {
+    font-family: sans-serif;
+    margin: 0;
+    background-color: #f4f4f4;
+    color: #333;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.container {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 400px;
+}
+
+.container h2 {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+form div {
+    margin-bottom: 15px;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"] {
+    width: calc(100% - 22px);
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+button[type="submit"], button {
+    background-color: #5cb85c;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+button:hover {
+    background-color: #4cae4c;
+}
+
+.error-message {
+    color: red;
+    font-size: 0.9em;
+    margin-top: 5px;
+}
+
+p {
+    text-align: center;
+    font-size: 0.9em;
+}
+
+a {
+    color: #5cb85c;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* Styles for index.html */
+.app-container {
+    width: 100%;
+    max-width: 1000px;
+    height: 90vh;
+    max-height: 800px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* برای جلوگیری از سرریز محتوا */
+}
+
+.app-container header {
+    background-color: #333;
+    color: white;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.app-container header h1 {
+    margin: 0;
+    font-size: 1.5em;
+}
+#userInfo button {
+    background-color: #d9534f;
+    margin-left: 10px;
+}
+#userInfo button:hover {
+    background-color: #c9302c;
+}
+
+
+.chat-layout {
+    display: flex;
+    flex-grow: 1; /* اجازه می‌دهد این بخش فضای باقی‌مانده را پر کند */
+    overflow: hidden; /* برای اسکرول داخلی */
+}
+
+.sidebar {
+    width: 30%;
+    min-width: 250px;
+    background-color: #f9f9f9;
+    border-right: 1px solid #eee;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto; /* اسکرول برای لیست چت‌ها */
+}
+.sidebar h3 {
+    margin-top: 0;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 10px;
+}
+#userSearchContainer {
+    margin-bottom: 15px;
+}
+#userSearchContainer input {
+    width: calc(70% - 12px);
+    margin-right: 5px;
+}
+#userSearchContainer button {
+    width: calc(30% - 12px);
+}
+#searchResults {
+    max-height: 100px;
+    overflow-y: auto;
+    border: 1px solid #eee;
+    margin-top:5px;
+}
+#searchResults div {
+    padding: 5px;
+    cursor: pointer;
+}
+#searchResults div:hover {
+    background-color: #e9e9e9;
+}
+
+#chatList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex-grow: 1;
+}
+
+#chatList li {
+    padding: 10px 15px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#chatList li:hover, #chatList li.active-chat {
+    background-color: #e9e9e9;
+}
+
+.unread-count {
+    background-color: #d9534f;
+    color: white;
+    font-size: 0.8em;
+    padding: 2px 6px;
+    border-radius: 10px;
+}
+
+.chat-area {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: #fff;
+}
+
+.placeholder-text {
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #aaa;
+    font-size: 1.2em;
+    text-align: center;
+    padding: 20px;
+}
+
+#activeChatContainer {
+    display: flex;
+    flex-direction: column;
+    height: 100%; /* مهم برای پر کردن فضای chat-area */
+}
+
+#chatHeader {
+    padding: 10px 15px;
+    border-bottom: 1px solid #eee;
+    background-color: #f9f9f9;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+#chatHeader h3 {
+    margin: 0;
+}
+.status-indicator {
+    font-size: 0.8em;
+    padding: 3px 7px;
+    border-radius: 5px;
+}
+.status-indicator.online {
+    background-color: #5cb85c;
+    color: white;
+}
+.status-indicator.offline {
+    background-color: #777;
+    color: white;
+}
+
+
+.messages-container {
+    flex-grow: 1;
+    padding: 15px;
+    overflow-y: auto; /* اسکرول برای پیام‌ها */
+    display: flex;
+    flex-direction: column; /* برای اینکه پیام‌ها از بالا به پایین چیده شوند */
+}
+
+.message {
+    max-width: 70%;
+    padding: 8px 12px;
+    border-radius: 15px;
+    margin-bottom: 10px;
+    word-wrap: break-word;
+}
+
+.message.sent {
+    background-color: #dcf8c6;
+    align-self: flex-end; /* پیام‌های ارسالی در سمت راست */
+    border-bottom-right-radius: 2px;
+}
+
+.message.received {
+    background-color: #f1f0f0;
+    align-self: flex-start; /* پیام‌های دریافتی در سمت چپ */
+    border-bottom-left-radius: 2px;
+}
+.message .sender-name {
+    font-size: 0.8em;
+    color: #555;
+    margin-bottom: 3px;
+    display: block;
+}
+
+.message .timestamp {
+    font-size: 0.7em;
+    color: #999;
+    display: block;
+    text-align: right; /* یا left بسته به sent/received */
+    margin-top: 4px;
+}
+.message.sent .timestamp { text-align: right; }
+.message.received .timestamp { text-align: left; } /* ممکن است نیاز به تنظیمات بیشتر باشد */
+
+
+#typingIndicator {
+    padding: 0 15px 5px 15px;
+    font-style: italic;
+    color: #aaa;
+    height: 20px; /* برای جلوگیری از پرش صفحه */
+}
+
+
+.message-input-area {
+    display: flex;
+    padding: 10px;
+    border-top: 1px solid #eee;
+    background-color: #f9f9f9;
+}
+
+#messageInput {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    margin-right: 10px;
+}
+
+#sendMessageButton {
+    background-color: #007bff;
+    border-radius: 20px;
+}
+#sendMessageButton:hover {
+    background-color: #0056b3;
+}
