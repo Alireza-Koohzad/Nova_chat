@@ -20,6 +20,7 @@ function defineAssociations() {
     });
 
     // ChatMember relationships
+    Chat.hasMany(ChatMember, { foreignKey: 'chatId', as: 'ChatMembers' });
     ChatMember.belongsTo(User, { foreignKey: 'userId', as: 'user' });
     ChatMember.belongsTo(Chat, { foreignKey: 'chatId', as: 'chat' });
 

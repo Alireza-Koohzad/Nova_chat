@@ -1,8 +1,12 @@
 // src/models/Chat.js
-const { DataTypes, Model } = require('sequelize');
-const { sequelize } = require('../config/database');
+const {DataTypes, Model} = require('sequelize');
+const {sequelize} = require('../config/database');
 
-class Chat extends Model {}
+class Chat extends Model {
+    static associate(models) { // اگر از روش associate استفاده می کنید
+        this.hasMany(models.ChatMember, {foreignKey: 'chatId', as: 'ChatMembers'});
+    }
+}
 
 Chat.init(
     {
