@@ -92,3 +92,11 @@ exports.loginUser = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error during login' });
     }
 };
+
+// @desc    Get logged in user profile
+// @route   GET /api/auth/me
+// @access  Private
+exports.getMe = async (req, res) => {
+    // req.user از میان‌افزار protect می‌آید
+    res.json({ success: true, user: req.user });
+};
