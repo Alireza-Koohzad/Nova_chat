@@ -1,0 +1,62 @@
+/* src/components/chat/UserSearch.css */
+.user-search-container {
+    position: relative; /* برای موقعیت‌دهی لیست نتایج */
+    padding: 10px 0;
+}
+
+.user-search-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #ccc;
+    border-radius: 20px; /* گوشه‌های گردتر */
+    font-size: 0.9em;
+    box-sizing: border-box;
+}
+.user-search-input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.1rem rgba(0,123,255,.25);
+}
+
+.search-loading,
+.search-error,
+.no-results-found {
+    padding: 8px 12px;
+    font-size: 0.85em;
+    color: #666;
+}
+.search-error { color: #dc3545; }
+
+
+.search-results-list {
+    list-style: none;
+    padding: 0;
+    margin: 5px 0 0 0;
+    position: absolute;
+    width: 100%;
+    background-color: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 10; /* برای قرار گرفتن روی سایر عناصر */
+}
+
+.search-result-item {
+    padding: 10px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.9em;
+}
+.search-result-item small {
+    color: #777;
+}
+
+.search-result-item:last-child {
+    border-bottom: none;
+}
+
+.search-result-item:hover {
+    background-color: #f5f5f5;
+}
