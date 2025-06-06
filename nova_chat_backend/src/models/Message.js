@@ -18,7 +18,7 @@ Message.init(
         },
         senderId: {
             type: DataTypes.UUID,
-            allowNull: false,
+            allowNull: true,
             // references: { model: 'Users', key: 'id' }
         },
         content: {
