@@ -1,0 +1,71 @@
+/* src/components/chat/MessageItem.css */
+.message-item-wrapper {
+    display: flex;
+    margin-bottom: 8px;
+    max-width: 75%; /* حداکثر عرض حباب پیام */
+}
+
+.message-item-wrapper.own-message {
+    align-self: flex-end; /* پیام‌های خودی در سمت راست */
+}
+
+.message-item-wrapper.other-message {
+    align-self: flex-start; /* پیام‌های دیگران در سمت چپ */
+}
+
+.message-bubble {
+    padding: 8px 12px;
+    border-radius: 18px; /* گردی بیشتر */
+    word-wrap: break-word; /* شکستن کلمات طولانی */
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+}
+
+.own-message .message-bubble {
+    background-color: #dcf8c6; /* رنگ سبز روشن شبیه واتس‌اپ */
+    border-bottom-right-radius: 4px; /* برای ایجاد حالت "دم" */
+}
+
+.other-message .message-bubble {
+    background-color: #ffffff; /* سفید برای پیام‌های دریافتی */
+    border-bottom-left-radius: 4px;
+}
+
+.message-sender-name {
+    font-size: 0.8em;
+    font-weight: 500;
+    color: #007bff; /* یا رنگ دلخواه */
+    margin-bottom: 3px;
+}
+
+.message-content {
+    font-size: 0.95em;
+    line-height: 1.4;
+    white-space: pre-wrap; /* برای حفظ فاصله‌ها و خطوط جدید */
+}
+
+.message-meta {
+    font-size: 0.75em;
+    color: #888;
+    margin-top: 5px;
+    text-align: right; /* زمان و تیک‌ها در سمت راست حباب */
+    display: flex;
+    align-items: center;
+    justify-content: flex-end; /* برای چسباندن به راست */
+}
+.other-message .message-meta {
+    /* برای پیام های دریافتی، زمان می تواند سمت چپ باشد یا همان راست بماند */
+    justify-content: flex-start;
+}
+
+
+.message-timestamp {
+    margin-right: 5px;
+}
+
+.ticks {
+    font-weight: bold;
+}
+.ticks.sending { color: #aaa; } /* ساعت */
+.ticks.sent { color: #777; } /* تک تیک خاکستری */
+.ticks.delivered { color: #555; } /* دو تیک خاکستری */
+.ticks.read { color: #34b7f1; } /* دو تیک آبی */
