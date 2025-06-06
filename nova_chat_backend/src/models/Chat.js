@@ -1,12 +1,8 @@
 // src/models/Chat.js
-const {DataTypes, Model} = require('sequelize');
-const {sequelize} = require('../config/database');
+const { DataTypes, Model } = require('sequelize');
+const { sequelize } = require('../config/database');
 
-class Chat extends Model {
-    static associate(models) { // اگر از روش associate استفاده می کنید
-        this.hasMany(models.ChatMember, {foreignKey: 'chatId', as: 'ChatMembers'});
-    }
-}
+class Chat extends Model {}
 
 Chat.init(
     {
@@ -16,31 +12,32 @@ Chat.init(
             primaryKey: true,
         },
         type: {
-            type: DataTypes.ENUM('private', 'group'),
+            type: DataTypes.ENUM('private', 'group'), // نوع چت
             allowNull: false,
             defaultValue: 'private',
         },
-        name: { // برای گروه‌ها
+        name: { // نام گروه (برای چت خصوصی می‌تواند null باشد)
             type: DataTypes.STRING,
             allowNull: true,
         },
-        creatorId: { // برای گروه‌ها، شناسه کاربری که گروه را ایجاد کرده
+        creatorId: { // شناسه کاربری که گروه را ایجاد کرده (فقط برای گروه)
             type: DataTypes.UUID,
             allowNull: true,
-            // onDelete: 'SET NULL' // اگر کاربر حذف شد، مقدار null شود
-            // references: { model: 'Users', key: 'id' } // این در association تعریف می‌شود
         },
-        lastMessageId: { // شناسه آخرین پیام در این چت (برای sort کردن چت‌ها و نمایش پیش‌نمایش)
+        lastMessageId: { // شناسه آخرین پیام در این چت
             type: DataTypes.UUID,
             allowNull: true,
-            // references: { model: 'Messages', key: 'id' } // این در association تعریف می‌شود
-        }
+        },
+        groupImageUrl: {
+          type: DataTypes.STRING,
+          allowNull: true,
+        },
     },
     {
         sequelize,
         modelName: 'Chat',
         tableName: 'chats',
-        timestamps: true,
+        timestamps: true, // createdAt, updatedAt
     }
 );
 
