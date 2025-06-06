@@ -10,7 +10,7 @@ function defineAssociations() {
         through: ChatMember,
         foreignKey: 'userId',
         otherKey: 'chatId',
-        as: 'chats', // User.getChats(), User.addChat()
+        as: 'memberInChats', // User.getChats(), User.addChat()
     });
     Chat.belongsToMany(User, {
         through: ChatMember,
@@ -20,7 +20,6 @@ function defineAssociations() {
     });
 
     // ChatMember relationships
-    Chat.hasMany(ChatMember, { foreignKey: 'chatId', as: 'ChatMembers' });
     ChatMember.belongsTo(User, { foreignKey: 'userId', as: 'user' });
     ChatMember.belongsTo(Chat, { foreignKey: 'chatId', as: 'chat' });
 
@@ -57,6 +56,7 @@ function defineAssociations() {
     // ChatMember and LastReadMessage (One-to-One) - اختیاری
     ChatMember.belongsTo(Message, { foreignKey: 'lastReadMessageId', as: 'lastReadMessage', constraints: false });
 
+    Chat.hasMany(ChatMember, { foreignKey: 'chatId', as: 'ChatMembersData' });
 
     console.log("Sequelize associations defined.");
 }
