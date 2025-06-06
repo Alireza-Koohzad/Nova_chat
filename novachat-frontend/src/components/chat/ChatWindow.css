@@ -1,0 +1,50 @@
+/* src/components/chat/ChatWindow.css */
+/* ... (بقیه استایل ها مانند قبل) ... */
+
+.chat-window-header {
+    /* ... */
+    display: flex; /* برای چیدمان بهتر اطلاعات هدر */
+    align-items: center;
+    justify-content: space-between; /* اگر دکمه های دیگری هم دارید */
+}
+
+.chat-header-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start; /* یا center اگر دوست دارید */
+}
+
+.chat-header-info h3 {
+    margin: 0;
+    font-size: 1.1em; /* یا 1.2em */
+    color: #111b21;
+}
+
+.chat-status-text {
+    font-size: 0.8em; /* یا 0.75em */
+    color: #667781; /* رنگ پیش‌فرض برای آفلاین یا last seen */
+}
+
+.chat-status-text.online {
+    color: #00a859; /* یا رنگ دلخواه برای آنلاین */
+    font-weight: 500;
+}
+
+.messages-list-area { /* تغییر نام از messages-list-container */
+    flex-grow: 1;
+    padding: 10px 5%;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.message-input-area-placeholder { /* تغییر نام */
+    background-color: #f0f2f5;
+    padding: 10px 15px;
+    display: flex;
+    align-items: center;
+    border-top: 1px solid #e0e0e0;
+    min-height: 62px; /* ارتفاع ثابت برای فرم ورود پیام */
+    box-sizing: border-box;
+}
+/* ... (بقیه استایل ها) ... */
