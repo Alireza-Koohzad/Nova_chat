@@ -14,38 +14,38 @@ ChatMember.init(
         chatId: {
             type: DataTypes.UUID,
             allowNull: false,
-            // references: { model: 'Chats', key: 'id' }
         },
         userId: {
             type: DataTypes.UUID,
             allowNull: false,
-            // references: { model: 'Users', key: 'id' }
         },
-        role: { // برای گروه‌ها: admin, member
+        role: { // نقش کاربر در چت (مخصوصا برای گروه ها)
             type: DataTypes.ENUM('member', 'admin'),
+            allowNull: false,
             defaultValue: 'member',
         },
         joinedAt: {
             type: DataTypes.DATE,
             defaultValue: DataTypes.NOW,
         },
-        lastReadMessageId: { // آخرین پیامی که کاربر در این چت خوانده است
+        lastReadMessageId: {
             type: DataTypes.UUID,
             allowNull: true,
-            // references: { model: 'Messages', key: 'id' }
         },
-
     },
     {
         sequelize,
         modelName: 'ChatMember',
         tableName: 'chat_members',
-        timestamps: false, // createdAt/updatedAt ممکن است اینجا لازم نباشد یا فقط createdAt
-        indexes: [ // برای جستجوی سریع‌تر
+        timestamps: true, // اضافه کردن createdAt و updatedAt می‌تواند مفید باشد
+        indexes: [
             {
                 unique: true,
-                fields: ['chatId', 'userId'], // هر کاربر فقط یک بار می‌تواند عضو یک چت باشد
+                fields: ['chatId', 'userId'],
             },
+            {
+                fields: ['userId'] // برای جستجوی سریع چت‌های یک کاربر
+            }
         ],
     }
 );
