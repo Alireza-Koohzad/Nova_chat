@@ -90,56 +90,61 @@ const formatChatResponse = async (chat, currentUserId) => {
 exports.getUserChats = async (req, res) => {
     try {
         const userId = req.user.id;
+        // ابتدا ID چت‌هایی که کاربر عضو آنهاست را پیدا کن
+        const userChatMemberships = await ChatMember.findAll({
+            where: { userId },
+            attributes: ['chatId']
+        });
+        const chatIds = userChatMemberships.map(cm => cm.chatId);
+
+        if (chatIds.length === 0) {
+            return res.json([]); // اگر کاربر عضوی از هیچ چتی نیست
+        }
+
         const chats = await Chat.findAll({
+            where: { id: { [Op.in]: chatIds } }, // فقط چت‌های مربوط به کاربر
             include: [
                 {
                     model: User,
-                    as: 'members',
-                    // where: { id: userId }, // این where باعث می شود فقط چت هایی که کاربر عضو آن هاست بیاید، ولی اطلاعات سایر اعضا را هم می خواهیم
+                    as: 'members', // اعضای هر چت
                     attributes: ['id', 'username', 'displayName', 'profileImageUrl'],
-                    through: {attributes: []}
-                },
-                { // این را اضافه می کنیم تا بتوانیم به lastReadMessageId دسترسی داشته باشیم
-                    model: ChatMember,
-                    as: 'ChatMembers', // این as باید با چیزی که در Chat.hasMany(ChatMember) تعریف شده مطابقت داشته باشد
-                    where: {userId: userId}, // اطلاعات عضویت فقط برای کاربر فعلی
-                    required: true // اطمینان از اینکه کاربر عضو چت است
+                    through: {
+                        model: ChatMember, // برای دسترسی به فیلدهای جدول واسط
+                        attributes: ['role'] // فقط نقش را از جدول واسط می‌خواهیم
+                    }
                 },
                 {
                     model: Message,
-                    as: 'lastMessage',
-                    include: [{model: User, as: 'sender', attributes: ['id', 'username', 'displayName']}]
+                    as: 'lastMessage', // آخرین پیام چت
+                    include: [{ model: User, as: 'sender', attributes: ['id', 'username', 'displayName']}]
+                },
+                {
+                    model: User, // ایجاد کننده گروه
+                    as: 'creator',
+                    attributes: ['id', 'username', 'displayName']
                 }
             ],
-            // include: [
-            //     {
-            //         model: User,
-            //         as: 'members',
-            //         where: {id: userId}, // فقط چت‌هایی که کاربر عضو آنهاست
-            //         attributes: ['id', 'username', 'displayName', 'profileImageUrl'], // اطلاعات اعضا
-            //         through: {attributes: []} // از آوردن اطلاعات جدول واسط ChatMember در اینجا خودداری کن
-            //     },
-            //     {
-            //         model: Message,
-            //         as: 'lastMessage', // آخرین پیام چت
-            //         include: [{model: User, as: 'sender', attributes: ['id', 'username', 'displayName']}]
-            //     }
-            // ],
             order: [
-                [{model: Message, as: 'lastMessage'}, 'createdAt', 'DESC'], // مرتب‌سازی بر اساس آخرین پیام
-                ['updatedAt', 'DESC'] // اگر آخرین پیام نداشت، بر اساس آپدیت چت
-            ], // مرتب سازی بر اساس آخرین پیام
+                ['updatedAt', 'DESC'] // ساده ترین راه اگر updatedAt چت با هر پیام آپدیت شود
+            ],
         });
 
         const formattedChats = await Promise.all(
             chats.map(chat => formatChatResponse(chat, userId))
         );
 
+        // مرتب سازی نهایی در سمت سرور پس از فرمت کردن (اگر لازم است)
+        formattedChats.sort((a, b) => {
+            const dateA = new Date(a.lastMessage?.createdAt || a.updatedAt);
+            const dateB = new Date(b.lastMessage?.createdAt || b.updatedAt);
+            return dateB - dateA;
+        });
+
         res.json(formattedChats);
 
     } catch (error) {
         console.error('Error fetching user chats:', error);
-        res.status(500).json({success: false, message: 'Server error'});
+        res.status(500).json({ success: false, message: 'Server error fetching chats' });
     }
 };
 
