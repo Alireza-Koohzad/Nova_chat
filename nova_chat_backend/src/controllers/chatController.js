@@ -9,86 +9,76 @@ const { validationResult } = require('express-validator');
 
 // Helper function to format chat response
 const formatChatResponse = async (chat, currentUserId) => {
-    const chatJSON = chat.toJSON();
+    if (!chat) return null; // اگر چت null بود
+    const chatJSON = chat.toJSON ? chat.toJSON() : { ...chat }; // اگر از plain object استفاده شده
 
-    // اگر چت خصوصی است، نام و تصویر پروفایل کاربر دیگر را اضافه کن
-    if (chatJSON.type === 'private' && chatJSON.members) {
-        const otherMemberUser = chatJSON.members.find(m => m.id !== currentUserId);
+    // اعضا (شامل نقش اگر موجود است)
+    if (chatJSON.members && chatJSON.members.length > 0) {
+        chatJSON.members = chatJSON.members.map(member => ({
+            id: member.id,
+            username: member.username,
+            displayName: member.displayName,
+            profileImageUrl: member.profileImageUrl,
+            // ChatMember شامل اطلاعات نقش است که از through در include می آید
+            role: member.ChatMember?.role || (member.id === chatJSON.creatorId ? 'admin' : 'member')
+        }));
+    }
+
+    if (chatJSON.type === 'private') {
+        const otherMemberUser = chatJSON.members?.find(m => m.id !== currentUserId);
         if (otherMemberUser) {
-            chatJSON.name = otherMemberUser.displayName || otherMemberUser.username;
-            chatJSON.profileImageUrl = otherMemberUser.profileImageUrl;
-            chatJSON.recipientId = otherMemberUser.id; // اضافه کردن شناسه کاربر مقابل
+            chatJSON.name = otherMemberUser.displayName || otherMemberUser.username; // نام چت خصوصی، نام کاربر دیگر
+            chatJSON.profileImageUrl = otherMemberUser.profileImageUrl; // تصویر کاربر دیگر
+            chatJSON.recipientId = otherMemberUser.id;
+        } else if (!chatJSON.name) {
+            chatJSON.name = "Private Chat"; // اگر به دلایلی کاربر دیگر پیدا نشد
         }
-    } else if (chatJSON.type === 'group' && !chatJSON.name) {
-        // اگر گروه نام ندارد، نامی بر اساس اعضا بساز (ساده شده)
-        if (chatJSON.members && chatJSON.members.length > 0) {
-            chatJSON.name = chatJSON.members.map(m => m.displayName || m.username).slice(0, 3).join(', ');
-        } else {
-            chatJSON.name = "Group Chat";
-        }
+    } else if (chatJSON.type === 'group') {
+        // نام گروه از خود فیلد chat.name می آید
+        // chatJSON.groupImageUrl = chat.groupImageUrl; // اگر تصویر گروه دارید
     }
 
     // اضافه کردن آخرین پیام (اگر وجود دارد)
-    if (chat.lastMessage) {
-        chatJSON.lastMessage = chat.lastMessage.toJSON();
-        if (chat.lastMessage.sender) {
-            chatJSON.lastMessage.sender = chat.lastMessage.sender.toJSON(); // فقط اطلاعات ضروری
+    if (chat.lastMessage) { // اگر lastMessage به صورت eager load شده باشد
+        chatJSON.lastMessage = chat.lastMessage.toJSON ? chat.lastMessage.toJSON() : { ...chat.lastMessage };
+        if (chat.lastMessage.sender) { // اگر فرستنده هم eager load شده
+            chatJSON.lastMessage.sender = chat.lastMessage.sender.toJSON ? chat.lastMessage.sender.toJSON() : { ...chat.lastMessage.sender };
+        }
+    } else if (chat.lastMessageId && !chatJSON.lastMessage) {
+        // اگر فقط ID آخرین پیام را داریم و خود پیام لود نشده، آن را fetch کن (اختیاری)
+        const lastMsg = await Message.findByPk(chat.lastMessageId, {
+            include: [{ model: User, as: 'sender', attributes: ['id', 'username', 'displayName']}]
+        });
+        if (lastMsg) {
+            chatJSON.lastMessage = lastMsg.toJSON();
+        }
+    }
+
+    // محاسبه تعداد پیام‌های خوانده نشده برای currentUserId
+    // این بخش را می‌توان دقیق‌تر کرد
+    if (chatJSON.id && currentUserId) {
+        const currentUserMembership = await ChatMember.findOne({
+            where: { chatId: chatJSON.id, userId: currentUserId },
+            attributes: ['lastReadMessageId']
+        });
+        if (currentUserMembership && chatJSON.lastMessage?.id && currentUserMembership.lastReadMessageId !== chatJSON.lastMessage.id) {
+            // شمارش پیام های جدیدتر از lastReadMessageId
+            const unreadCount = await Message.count({
+                where: {
+                    chatId: chatJSON.id,
+                    id: { [Op.ne]: chatJSON.lastMessage.id }, // به جز خود آخرین پیام (اگر این منطق را می خواهید)
+                    createdAt: {
+                        [Op.gt]: (await Message.findByPk(currentUserMembership.lastReadMessageId || '00000000-0000-0000-0000-000000000000', {attributes: ['createdAt']}))?.createdAt || new Date(0)
+                    }
+                }
+            });
+            chatJSON.unreadCount = unreadCount;
+        } else {
+            chatJSON.unreadCount = 0;
         }
     } else {
-        // اگر lastMessageId ست شده ولی خود پیام لود نشده
-        // این حالت نباید زیاد پیش بیاید اگر include درست باشد
-        if (chat.lastMessageId) {
-            const lastMsg = await Message.findByPk(chat.lastMessageId, {
-                include: [{
-                    model: User,
-                    as: 'sender',
-                    attributes: ['id', 'username', 'displayName']
-                }]
-            });
-            if (lastMsg) {
-                chatJSON.lastMessage = lastMsg.toJSON();
-            }
-        }
+        chatJSON.unreadCount = 0;
     }
-
-    // حذف اطلاعات اضافی اعضا از پاسخ اصلی چت (اطلاعات کامل اعضا در یک endpoint دیگر یا با پارامتر قابل دریافت باشد)
-    // delete chatJSON.members;
-    // برای نمایش لیست چت ها، می توانیم اطلاعات اعضا را محدود کنیم
-    if (chatJSON.members) {
-        chatJSON.members = chatJSON.members.map(m => ({
-            id: m.id,
-            username: m.username,
-            displayName: m.displayName,
-            profileImageUrl: m.profileImageUrl,
-            // role: m.ChatMember.role, // اگر اطلاعات ChatMember هم include شده باشد
-        }));
-    }
-    if (chatJSON.members && chat.ChatMembers) { // ChatMembers باید از include اصلی بیاید
-        const currentUserMembership = chat.ChatMembers.find(cm => cm.userId === currentUserId);
-        if (currentUserMembership && chat.lastMessageId) {
-            // محاسبه تعداد پیام‌های خوانده نشده
-            // این یک روش ساده است. برای دقت بیشتر باید تاریخ پیام‌ها را مقایسه کرد.
-            // یا تعداد پیام‌های جدیدتر از lastReadMessageId را شمرد.
-            if (currentUserMembership.lastReadMessageId !== chat.lastMessageId) {
-                // برای شمارش دقیق، باید کوئری بزنیم
-                const unreadCount = await Message.count({
-                    where: {
-                        chatId: chat.id,
-                        createdAt: {
-                            [Op.gt]: (await Message.findByPk(currentUserMembership.lastReadMessageId || '00000000-0000-0000-0000-000000000000')).createdAt || new Date(0)
-                        } // پیام های جدیدتر از آخرین پیام خوانده شده
-                        // یا اگر lastReadMessageId نال است، همه پیام‌ها
-                    }
-                });
-                chatJSON.unreadCount = unreadCount;
-            } else {
-                chatJSON.unreadCount = 0;
-            }
-        } else {
-            chatJSON.unreadCount = 0; // اگر آخرین پیامی وجود نداشته باشد یا کاربر عضو نباشد
-        }
-    }
-
 
     return chatJSON;
 };
