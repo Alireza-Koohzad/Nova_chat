@@ -6,7 +6,7 @@ const http = require('http'); // ماژول http خود Node.js
 const {Server} = require('socket.io'); // Server از socket.io
 const {connectDB, sequelize} = require('./config/database');
 const setupSwagger = require('./config/swagger');
-
+const {Op} = require('sequelize');
 // Import مدل‌ها
 require('./models/User');
 const Chat = require('./models/Chat'); // مدل جدید
@@ -85,6 +85,22 @@ io.on('connection', async (socket) => {
 
     } catch (error) {
         console.error("Error updating user status on connect:", error);
+    }
+    // ** جدید: ارسال لیست کاربران آنلاین به کلاینت تازه متصل شده **
+    try {
+        const onlineUsers = await User.findAll({
+            where: { status: 'online', id: { [Op.ne]: socket.userId } }, // به جز خودش
+            attributes: ['id', 'status', 'lastSeenAt']
+        });
+        // یا فقط کاربرانی که با socket.userId چت مشترک دارند یا دوست هستند (پیچیده تر)
+
+        socket.emit('currentOnlineUsers', onlineUsers.map(u => ({
+            userId: u.id,
+            status: u.status,
+            lastSeenAt: u.lastSeenAt
+        })));
+    } catch (error) {
+        console.error("Error sending online users list:", error);
     }
 
     socket.on('markMessagesAsRead', async (data) => {
