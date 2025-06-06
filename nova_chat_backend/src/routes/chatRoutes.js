@@ -4,10 +4,11 @@ const {
     createOrGetPrivateChat,
     getUserChats,
     getChatMessages,
-    // createGroupChat,
+    createGroupChat,
     // addMemberToGroup,
 } = require('../controllers/chatController'); // این فایل را ایجاد خواهیم کرد
-const { protect } = require('../middleware/authMiddleware'); // میان‌افزار احراز هویت HTTP
+const {protect} = require('../middleware/authMiddleware'); // میان‌افزار احراز هویت HTTP
+const {body} = require('express-validator'); // برای اعتبارسنجی
 const router = express.Router();
 
 /**
@@ -114,6 +115,58 @@ router.post('/private/:recipientId', protect, createOrGetPrivateChat);
  *         description: Chat not found
  */
 router.get('/:chatId/messages', protect, getChatMessages);
+
+
+/**
+ * @swagger
+ * /api/chats/groups:
+ *   post:
+ *     summary: Create a new group chat
+ *     tags: [Chats]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Name of the group
+ *                 example: "Project Team"
+ *               memberIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: uuid
+ *                 description: Optional array of user IDs to add to the group (creator is added automatically)
+ *                 example: ["uuid-for-user2", "uuid-for-user3"]
+ *     responses:
+ *       201:
+ *         description: Group created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ChatDetailResponse' // از همان schema قبلی استفاده می‌کنیم
+ *       400:
+ *         description: Bad request (e.g., missing name, invalid member IDs)
+ *       401:
+ *         description: Not authorized
+ */
+router.post(
+    '/groups',
+    protect,
+    [
+        body('name').notEmpty().withMessage('Group name is required.').trim().escape(),
+        body('memberIds').optional().isArray().withMessage('memberIds must be an array.'),
+        body('memberIds.*').optional().isUUID().withMessage('Each memberId must be a valid UUID.')
+    ],
+    createGroupChat
+);
 
 
 module.exports = router;
