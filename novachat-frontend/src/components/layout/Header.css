@@ -1,0 +1,35 @@
+/* src/components/layout/Header.css */
+.app-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background-color: #007bff; /* رنگ هدر */
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    height: 60px; /* ارتفاع ثابت برای هدر */
+    flex-shrink: 0; /* جلوگیری از کوچک شدن هدر */
+}
+
+.header-logo {
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+.header-user-info span {
+    margin-right: 15px;
+}
+
+.logout-button {
+    padding: 8px 15px;
+    background-color: #dc3545; /* رنگ دکمه خروج */
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.logout-button:hover {
+    background-color: #c82333;
+}
