@@ -69,3 +69,11 @@
 .ticks.sent { color: #777; } /* تک تیک خاکستری */
 .ticks.delivered { color: #555; } /* دو تیک خاکستری */
 .ticks.read { color: #34b7f1; } /* دو تیک آبی */
+.message-ticks { /* تغییر نام از .ticks */
+    font-weight: bold;
+    margin-left: 4px; /* کمی فاصله از زمان */
+}
+.message-ticks.sending { color: #aaa; }
+.message-ticks.sent { color: #777; }
+.message-ticks.delivered { color: #555; }
+.message-ticks.read { color: #34b7f1; } /* آبی */

@@ -8,30 +8,32 @@ function MessageItem({ message, isOwnMessage }) {
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
-    // وضعیت تیک‌ها (ساده شده)
-    let tickStatus = '';
+    let tickIcon = null;
     if (isOwnMessage) {
-        if (message.readByRecipient) { // فرض می کنیم این فیلد در آبجکت پیام ست می شود
-            tickStatus = <span className="ticks read">✓✓</span>; // دو تیک آبی
+        // deliveryStatus: 'sending', 'sent', 'delivered', 'read'
+        // readByRecipient: boolean (این را می توان از deliveryStatus === 'read' هم نتیجه گرفت)
+        if (message.deliveryStatus === 'read' || message.readByRecipient) {
+            tickIcon = <span className="message-ticks read">✓✓</span>;
         } else if (message.deliveryStatus === 'delivered') {
-            tickStatus = <span className="ticks delivered">✓✓</span>; // دو تیک خاکستری
-        } else if (message.id && !message.tempId) { // اگر id دارد و موقت نیست یعنی به سرور رسیده
-            tickStatus = <span className="ticks sent">✓</span>; // یک تیک خاکستری
+            tickIcon = <span className="message-ticks delivered">✓✓</span>;
+        } else if (message.deliveryStatus === 'sent' || (message.id && !message.tempId && !message.deliveryStatus)) {
+            // اگر id دارد و tempId ندارد و deliveryStatus هم ست نشده، یعنی sent
+            tickIcon = <span className="message-ticks sent">✓</span>;
         } else if (message.deliveryStatus === 'sending' || message.tempId) {
-            tickStatus = <span className="ticks sending">🕒</span>; // آیکون ساعت برای در حال ارسال
+            tickIcon = <span className="message-ticks sending">🕒</span>;
         }
     }
 
     return (
         <div className={`message-item-wrapper ${isOwnMessage ? 'own-message' : 'other-message'}`}>
             <div className="message-bubble">
-                {!isOwnMessage && message.sender && ( // نمایش نام فرستنده برای پیام‌های دیگران
+                {!isOwnMessage && message.sender && (
                     <div className="message-sender-name">{message.sender.displayName || message.sender.username}</div>
                 )}
                 <div className="message-content">{message.content}</div>
                 <div className="message-meta">
                     <span className="message-timestamp">{formatDate(message.createdAt)}</span>
-                    {isOwnMessage && tickStatus}
+                    {isOwnMessage && tickIcon}
                 </div>
             </div>
         </div>

@@ -17,3 +17,38 @@
 .message-list-loading-more {
     padding: 10px;
 }
+
+.message-list-status { /* نام عمومی تر */
+    text-align: center;
+    padding: 20px;
+    color: #777;
+    font-style: italic;
+}
+.message-list-status.small {
+    font-size: 0.8em;
+    padding: 10px;
+}
+
+.load-more-container {
+    text-align: center;
+    padding: 10px 0;
+}
+
+.load-more-button {
+    padding: 8px 15px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.load-more-button:hover {
+    background-color: #0056b3;
+}
+
+.load-more-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
