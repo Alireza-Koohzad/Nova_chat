@@ -1,0 +1,64 @@
+/* src/components/chat/MessageInput.css */
+.message-input-form {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    background-color: #f0f2f5; /* رنگ پس‌زمینه فرم ورود پیام */
+    border-top: 1px solid #e0e0e0;
+    min-height: 62px;
+    box-sizing: border-box;
+}
+
+.message-text-input {
+    flex-grow: 1;
+    padding: 10px 15px;
+    border: 1px solid #d1d7db;
+    border-radius: 20px;
+    font-size: 0.95em;
+    margin: 0 10px; /* فاصله از دکمه‌ها */
+    background-color: #fff;
+    max-height: 100px; /* برای جلوگیری از بلند شدن بیش از حد در صورت متن چند خطی (اگر textarea استفاده شود) */
+    resize: none; /* اگر textarea بود */
+}
+.message-text-input:focus {
+    outline: none;
+    border-color: #007bff;
+}
+
+.send-message-button {
+    background-color: #00a884; /* رنگ سبز واتس‌اپ */
+    color: white;
+    border: none;
+    border-radius: 50%; /* دایره‌ای */
+    width: 40px;
+    height: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.send-message-button:hover {
+    background-color: #008769;
+}
+.send-message-button:disabled {
+    background-color: #96c3bb; /* یا یک رنگ خاکستری */
+    cursor: not-allowed;
+}
+.send-message-button svg {
+    fill: white; /* رنگ آیکون */
+}
+
+/* دکمه پیوست فایل (اختیاری برای آینده) */
+.attachment-button {
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    font-size: 1.5em; /* اندازه آیکون */
+    color: #54656f;
+}
+.attachment-button:hover {
+    color: #007bff;
+}
