@@ -1,0 +1,19 @@
+.message-list-area {
+    flex-grow: 1;
+    padding: 10px 20px; /* یا padding دلخواه، هماهنگ با ChatWindow */
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column; /* پیام‌ها از بالا به پایین */
+}
+
+.message-list-loading,
+.message-list-empty,
+.message-list-loading-more {
+    text-align: center;
+    padding: 20px;
+    color: #777;
+    font-style: italic;
+}
+.message-list-loading-more {
+    padding: 10px;
+}
