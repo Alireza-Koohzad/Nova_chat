@@ -1,50 +1,154 @@
 /* src/components/chat/ChatWindow.css */
-/* ... (بقیه استایل ها مانند قبل) ... */
 
-.chat-window-header {
-    /* ... */
-    display: flex; /* برای چیدمان بهتر اطلاعات هدر */
-    align-items: center;
-    justify-content: space-between; /* اگر دکمه های دیگری هم دارید */
+.chat-window-container {
+    flex-grow: 1; /* برای پر کردن فضای باقی مانده در ChatPage */
+    display: flex;
+    flex-direction: column;
+    background-color: #e5ddd5; /* رنگ پس‌زمینه اصلی شبیه واتس‌اپ */
+    /* برای استفاده از تصویر پس‌زمینه:
+    background-image: url('/path-to-your-chat-background-image.png');
+    background-repeat: repeat;
+    */
+    overflow: hidden; /* جلوگیری از اسکرول کلی و مدیریت اسکرول داخلی */
 }
+
+.chat-window-placeholder {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    color: #54656f; /* رنگ متن placeholder */
+    background-color: #f0f2f5; /* یک پس‌زمینه متفاوت برای placeholder */
+    padding: 20px;
+    font-size: 1.1em;
+}
+
+.chat-window-placeholder p {
+    margin: 5px 0;
+}
+
+/* --- Header Styles --- */
+.chat-window-header {
+    background-color: #f0f2f5; /* رنگ پس‌زمینه هدر */
+    padding: 10px 16px; /* پدینگ داخلی */
+    border-bottom: 1px solid #e0e0e0; /* خط جداکننده پایین */
+    display: flex;
+    align-items: center;
+    min-height: 60px; /* حداقل ارتفاع برای هدر */
+    box-sizing: border-box;
+    flex-shrink: 0; /* جلوگیری از کوچک شدن هدر در صورت کمبود فضا */
+}
+
+.chat-header-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #bdbdbd; /* رنگ پیش‌فرض آواتار */
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    font-size: 1.1em; /* اندازه فونت برای حرف اول نام */
+    margin-right: 12px;
+    position: relative; /* برای نقطه وضعیت آنلاین */
+    flex-shrink: 0; /* جلوگیری از کوچک شدن آواتار */
+}
+
+.header-status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    border: 2px solid #f0f2f5; /* رنگ پس‌زمینه هدر برای ایجاد فاصله */
+}
+
+.header-status-dot.online {
+    background-color: #4caf50; /* سبز برای آنلاین */
+}
+/* می‌توانید برای وضعیت‌های دیگر هم استایل تعریف کنید */
+
 
 .chat-header-info {
     display: flex;
     flex-direction: column;
-    align-items: flex-start; /* یا center اگر دوست دارید */
+    align-items: flex-start; /* متن‌ها از چپ تراز شوند */
+    flex-grow: 1; /* فضای باقی مانده را پر کند */
+    overflow: hidden; /* برای جلوگیری از سرریز متن‌های طولانی */
+    margin-right: 10px; /* فاصله از اکشن‌های احتمالی سمت راست */
 }
 
 .chat-header-info h3 {
     margin: 0;
-    font-size: 1.1em; /* یا 1.2em */
-    color: #111b21;
+    font-size: 1.05em; /* اندازه نام کاربر/گروه */
+    color: #111b21; /* رنگ تیره برای نام */
+    font-weight: 500;
+    white-space: nowrap; /* جلوگیری از شکستن خط نام */
+    overflow: hidden; /* مخفی کردن سرریز */
+    text-overflow: ellipsis; /* نمایش ... برای نام طولانی */
+    max-width: 100%; /* برای اینکه ellipsis کار کند */
 }
 
 .chat-status-text {
-    font-size: 0.8em; /* یا 0.75em */
+    font-size: 0.8em; /* اندازه متن وضعیت */
     color: #667781; /* رنگ پیش‌فرض برای آفلاین یا last seen */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%; /* برای اینکه ellipsis کار کند */
+    margin-top: 2px; /* فاصله کم از نام */
 }
 
 .chat-status-text.online {
-    color: #00a859; /* یا رنگ دلخواه برای آنلاین */
+    color: #00a859; /* رنگ سبز برای آنلاین */
     font-weight: 500;
 }
 
-.messages-list-area { /* تغییر نام از messages-list-container */
-    flex-grow: 1;
-    padding: 10px 5%;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-}
-
-.message-input-area-placeholder { /* تغییر نام */
-    background-color: #f0f2f5;
-    padding: 10px 15px;
+.chat-header-actions {
+    /* برای دکمه‌های تماس، منو و ... در سمت راست هدر */
     display: flex;
     align-items: center;
-    border-top: 1px solid #e0e0e0;
-    min-height: 62px; /* ارتفاع ثابت برای فرم ورود پیام */
-    box-sizing: border-box;
+    flex-shrink: 0;
 }
-/* ... (بقیه استایل ها) ... */
+
+.chat-header-actions button {
+    background: none;
+    border: none;
+    color: #54656f; /* رنگ آیکون‌ها */
+    padding: 8px;
+    margin-left: 8px;
+    cursor: pointer;
+    font-size: 1.3em; /* اندازه آیکون‌ها */
+}
+.chat-header-actions button:hover {
+    color: #007bff; /* تغییر رنگ در هاور */
+}
+
+
+/* --- Typing Indicator Styles --- */
+.typing-indicator {
+    padding: 0px 20px 5px 20px; /* پدینگ هماهنگ با MessageList */
+    font-size: 0.85em;
+    color: #667781; /* رنگ متن */
+    font-style: italic;
+    height: 20px; /* ارتفاع ثابت برای جلوگیری از پرش صفحه */
+    box-sizing: border-box;
+    flex-shrink: 0; /* جلوگیری از کوچک شدن */
+    background-color: #e5ddd5; /* هماهنگ با پس‌زمینه اصلی چت */
+    /* یا اگر می‌خواهید در یک نوار جدا باشد:
+    background-color: #f0f2f5;
+    border-top: 1px solid #e0e0e0;
+    */
+    line-height: 20px; /* برای تراز عمودی متن */
+    text-align: left; /* یا center */
+}
+
+/* --- MessageList و MessageInput در فایل‌های CSS خودشان استایل‌دهی می‌شوند --- */
+/* .messages-list-area و .message-input-area-placeholder قبلا در ChatWindow.js استفاده شده بودند
+   اما منطقی‌تر است که استایل‌های اصلی این بخش‌ها در فایل‌های CSS کامپوننت‌های MessageList و MessageInput باشند.
+   ChatWindow.css فقط چیدمان کلی و هدر را مدیریت می‌کند.
+*/
