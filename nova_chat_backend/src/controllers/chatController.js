@@ -5,6 +5,7 @@ const User = require('../models/User');
 const Message = require('../models/Message');
 const ChatMember = require('../models/ChatMember');
 const {sequelize} = require('../config/database'); // برای تراکنش‌ها
+const { validationResult } = require('express-validator');
 
 // Helper function to format chat response
 const formatChatResponse = async (chat, currentUserId) => {
@@ -182,12 +183,7 @@ exports.createOrGetPrivateChat = async (req, res) => {
                 required: true,
                 attributes: [] // ما فقط به وجود رکوردها نیاز داریم
             }],
-            // اینجا یک GROUP BY و HAVING برای اطمینان از اینکه دقیقا دو عضو مشخص شده وجود دارند، نیاز است
-            // Sequelize این را کمی سخت می‌کند. یک راه ساده‌تر:
-            // ۱. تمام چت‌های خصوصی فرستنده را بگیر.
-            // ۲. در بین آنها، چتی را پیدا کن که گیرنده هم عضو آن باشد و فقط همین دو نفر عضو باشند.
-            // یک راه حل دقیق‌تر:
-            // استفاده از subquery یا join پیچیده‌تر
+
         });
 
         // راه حل ساده تر (ولی ممکن است برای دیتابیس های خیلی بزرگ بهینه نباشد):
@@ -299,4 +295,94 @@ exports.getChatMessages = async (req, res) => {
     }
 };
 
-// توابع برای گروه ها در فاز بعدی ...
+const createSystemMessage = async (chatId, content, transaction = null) => {
+    return Message.create({
+        chatId,
+        content,
+        contentType: 'system',
+        // senderId برای پیام سیستمی می‌تواند null باشد
+    }, { transaction });
+};
+
+
+// @desc    Create a new group chat
+// @route   POST /api/chats/groups
+// @access  Private
+exports.createGroupChat = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { name, memberIds } = req.body; // name: نام گروه, memberIds: آرایه‌ای از ID کاربران برای اضافه شدن به گروه
+    const creatorId = req.user.id;
+
+    if (!name || name.trim() === '') {
+        return res.status(400).json({ success: false, message: 'Group name is required.' });
+    }
+
+    // مطمئن شو creatorId در memberIds نیست (یا اگر هست، فقط یکبار و با نقش ادمین اضافه شود)
+    // و حداقل یک عضو دیگر به جز ایجادکننده وجود داشته باشد (یا اینکه گروه تک نفره مجاز باشد؟)
+    // فعلا فرض می کنیم ایجاد کننده هم باید در memberIds باشد یا خودمان اضافه اش می کنیم.
+
+    const finalMemberIds = [...new Set([creatorId, ...(memberIds || [])])]; // اطمینان از وجود ایجادکننده و عدم تکرار
+
+    if (finalMemberIds.length < 2) { // معمولا گروه حداقل دو نفر است، اما بسته به نیاز شما
+        // return res.status(400).json({ success: false, message: 'A group must have at least one other member besides the creator.' });
+    }
+
+    const t = await sequelize.transaction();
+    try {
+        // ۱. ایجاد چت از نوع گروه
+        const newGroup = await Chat.create({
+            type: 'group',
+            name,
+            creatorId,
+        }, { transaction: t });
+
+        // ۲. اضافه کردن اعضا به گروه
+        const chatMembersData = finalMemberIds.map(userId => ({
+            chatId: newGroup.id,
+            userId,
+            role: userId === creatorId ? 'admin' : 'member', // ایجادکننده، ادمین است
+        }));
+        await ChatMember.bulkCreate(chatMembersData, { transaction: t });
+
+        // ۳. (اختیاری) ایجاد یک پیام سیستمی "گروه ایجاد شد"
+        const creatorUser = await User.findByPk(creatorId, { attributes: ['displayName', 'username']});
+        const creatorName = creatorUser.displayName || creatorUser.username;
+        await createSystemMessage(newGroup.id, `${creatorName} created the group "${name}"`, t);
+        // شما می توانید آخرین پیام گروه را هم با این پیام سیستمی آپدیت کنید.
+        // یا بگذارید اولین پیام واقعی کاربران، lastMessageId را آپدیت کند.
+
+        await t.commit();
+
+        // برگرداندن اطلاعات کامل گروه جدید (شامل اعضا)
+        const groupDetails = await Chat.findByPk(newGroup.id, {
+            include: [
+                { model: User, as: 'creator', attributes: ['id', 'username', 'displayName'] },
+                {
+                    model: User,
+                    as: 'members',
+                    attributes: ['id', 'username', 'displayName', 'profileImageUrl'],
+                    through: { attributes: ['role'] } // برای گرفتن نقش از جدول ChatMember
+                },
+                // { model: Message, as: 'lastMessage' } // اگر پیام سیستمی را به عنوان آخرین پیام ست کردید
+            ]
+        });
+
+        // TODO: به اعضای گروه از طریق سوکت اطلاع بده که به گروه جدید اضافه شده‌اند
+        // io.to(memberId1).emit('newChat', groupDetails);
+        // io.to(memberId2).emit('newChat', groupDetails); ...
+
+        res.status(201).json(await formatChatResponse(groupDetails, creatorId)); // از تابع formatChatResponse قبلی استفاده می‌کنیم
+
+    } catch (error) {
+        await t.rollback();
+        console.error('Error creating group chat:', error);
+        if (error.name === 'SequelizeForeignKeyConstraintError') {
+            return res.status(400).json({ success: false, message: 'One or more member IDs are invalid.' });
+        }
+        res.status(500).json({ success: false, message: 'Server error while creating group.' });
+    }
+};
