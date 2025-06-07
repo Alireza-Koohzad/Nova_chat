@@ -381,3 +381,102 @@ exports.createGroupChat = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error while creating group.' });
     }
 };
+
+
+// @desc    Add a member to a group chat (by admin)
+// @route   POST /api/chats/:chatId/members
+// @access  Private (Admin Only)
+exports.addMemberToGroup = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { chatId } = req.params;
+    const { userId: userIdToAdd } = req.body; // کاربری که باید اضافه شود
+    const adminUser = req.user; // ادمینی که درخواست را داده (از protect و ensureGroupAdmin)
+
+    if (!userIdToAdd) {
+        return res.status(400).json({ success: false, message: 'User ID to add is required.' });
+    }
+
+    if (userIdToAdd === adminUser.id) {
+        return res.status(400).json({ success: false, message: 'Admin is already a member.' });
+    }
+
+    const t = await sequelize.transaction();
+    try {
+        // req.chat از میان‌افزار ensureGroupAdmin می‌آید
+        const chat = req.chat;
+
+        // بررسی اینکه آیا کاربر جدید یک کاربر معتبر است
+        const userToAdInstance = await User.findByPk(userIdToAdd);
+        if (!userToAdInstance) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: 'User to add not found.' });
+        }
+
+        // بررسی اینکه آیا کاربر از قبل عضو گروه است
+        const existingMembership = await ChatMember.findOne({
+            where: { chatId, userId: userIdToAdd },
+            transaction: t // برای اطمینان از خواندن در همان تراکنش
+        });
+
+        if (existingMembership) {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: 'User is already a member of this group.' });
+        }
+
+        // اضافه کردن کاربر به عنوان عضو جدید
+        const newMember = await ChatMember.create({
+            chatId,
+            userId: userIdToAdd,
+            role: 'member', // به طور پیش‌فرض، عضو جدید نقش 'member' دارد
+        }, { transaction: t });
+
+        // ایجاد پیام سیستمی
+        const adminName = adminUser.displayName || adminUser.username;
+        const newMemberName = userToAdInstance.displayName || userToAdInstance.username;
+        const systemMessageContent = `${adminName} added ${newMemberName} to the group.`;
+        const systemMessage = await createSystemMessage(chatId, systemMessageContent, t);
+
+        // آپدیت lastMessageId و updatedAt برای چت
+        await chat.update({ lastMessageId: systemMessage.id, updatedAt: new Date() }, { transaction: t });
+
+        await t.commit();
+
+        // برگرداندن اطلاعات عضو جدید (یا کل گروه آپدیت شده)
+        // برای سادگی، فقط پیام موفقیت‌آمیز برمی‌گردانیم. کلاینت می‌تواند لیست اعضا را دوباره fetch کند.
+        // یا می‌توانید اطلاعات عضو جدید را برگردانید:
+        const addedMemberDetails = {
+            userId: newMember.userId,
+            username: userToAdInstance.username,
+            displayName: userToAdInstance.displayName,
+            profileImageUrl: userToAdInstance.profileImageUrl,
+            role: newMember.role,
+            joinedAt: newMember.joinedAt
+        };
+
+        // TODO: به کاربر جدید و سایر اعضای گروه از طریق سوکت اطلاع بده
+        // io.to(userIdToAdd).emit('addedToGroup', await formatChatResponse(chat, userIdToAdd)); // به کاربر جدید
+        // chat.members.forEach(member => { (اعضای قبلی)
+        //    if(member.id !== userIdToAdd && member.id !== adminUser.id)
+        //        io.to(member.id).emit('memberAddedToGroup', { chatId, newMember: addedMemberDetails, systemMessage });
+        // });
+        // io.to(adminUser.id).emit('memberAddedToGroup', ...); // به خود ادمین هم می توان فرستاد
+        // یا یک رویداد کلی به روم چت:
+        // io.to(chatId).emit('groupUpdate', { type: 'member_added', actor: adminUser, target: userToAdInstance, systemMessage });
+
+
+        res.status(201).json({
+            success: true,
+            message: `${newMemberName} added to the group.`,
+            member: addedMemberDetails
+        });
+
+    } catch (error) {
+        await t.rollback();
+        console.error('Error adding member to group:', error);
+        res.status(500).json({ success: false, message: 'Server error while adding member.' });
+    }
+};
