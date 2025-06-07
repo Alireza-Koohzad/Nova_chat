@@ -7,6 +7,7 @@ const {
     createGroupChat,
     addMemberToGroup,
     leaveGroupChat,
+    removeMemberFromGroup,
 } = require('../controllers/chatController'); // این فایل را ایجاد خواهیم کرد
 const {protect} = require('../middleware/authMiddleware');
 const { ensureGroupAdmin } = require('../middleware/groupAdminMiddleware');
@@ -266,6 +267,47 @@ router.delete(
     leaveGroupChat
 );
 
+/**
+ * @swagger
+ * /api/chats/{chatId}/members/{memberIdToRemove}:
+ *   delete:
+ *     summary: Remove a member from a group chat (Admin only)
+ *     tags: [Chats]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: chatId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *       - in: path
+ *         name: memberIdToRemove
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The ID of the user to remove
+ *     responses:
+ *       200:
+ *         description: User removed successfully
+ *       400:
+ *         description: Bad request (e.g., admin cannot remove self)
+ *       401:
+ *         description: Not authorized
+ *       403:
+ *         description: Forbidden (not an admin)
+ *       404:
+ *         description: Chat, User to remove, or Membership not found
+ */
+router.delete(
+    '/:chatId/members/:memberIdToRemove',
+    protect,
+    ensureGroupAdmin, // فقط ادمین می تواند حذف کند
+    // اینجا می توانید یک اعتبارسنجی برای memberIdToRemove هم اضافه کنید (isUUID)
+    removeMemberFromGroup
+);
 
 
 module.exports = router;

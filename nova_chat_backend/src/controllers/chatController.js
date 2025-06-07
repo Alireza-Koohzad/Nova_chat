@@ -593,3 +593,86 @@ exports.leaveGroupChat = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error while leaving group.' });
     }
 };
+
+
+// @desc    Remove a member from a group chat (Admin only)
+// @route   DELETE /api/chats/:chatId/members/:memberIdToRemove
+// @access  Private (Admin only)
+exports.removeMemberFromGroup = async (req, res) => {
+    const { chatId, memberIdToRemove } = req.params;
+    const adminUser = req.user; // ادمینی که درخواست را ارسال کرده
+    // req.chat از ensureGroupAdmin
+
+    if (memberIdToRemove === adminUser.id) {
+        return res.status(400).json({ success: false, message: "Admin cannot remove themselves using this endpoint. Use 'leave group' instead." });
+    }
+
+    const t = await sequelize.transaction();
+    try {
+        const userToRemoveDetails = await User.findByPk(memberIdToRemove, { attributes: ['id', 'displayName', 'username']});
+        if (!userToRemoveDetails) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: 'User to remove not found.' });
+        }
+
+        const membershipToRemove = await ChatMember.findOne({
+            where: { chatId, userId: memberIdToRemove },
+            transaction: t,
+        });
+
+        if (!membershipToRemove) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: 'User is not a member of this group.' });
+        }
+
+        // اگر ادمین دیگری سعی در حذف یک ادمین دیگر دارد (بسته به سیاست برنامه)
+        // if (membershipToRemove.role === 'admin' && req.chat.creatorId !== adminUser.id) {
+        //   // فقط ایجاد کننده اصلی گروه می تواند سایر ادمین ها را حذف کند (یک نمونه سیاست)
+        //   await t.rollback();
+        //   return res.status(403).json({ success: false, message: 'Only the group creator can remove other admins.' });
+        // }
+
+        await membershipToRemove.destroy({ transaction: t });
+
+        // ایجاد پیام سیستمی
+        const removedUserName = userToRemoveDetails.displayName || userToRemoveDetails.username;
+        const adminName = adminUser.displayName || adminUser.username;
+        const systemMessageContent = `${adminName} removed ${removedUserName} from the group.`;
+        const systemMessage = await createSystemMessage(chatId, systemMessageContent, t);
+
+        // آپدیت lastMessageId و updatedAt چت
+        await Chat.update(
+            { lastMessageId: systemMessage.id, updatedAt: new Date() },
+            { where: { id: chatId }, transaction: t }
+        );
+
+        await t.commit();
+
+        // ** اطلاع رسانی از طریق سوکت **
+        if (io) {
+            // به کاربر حذف شده اطلاع بده
+            io.to(memberIdToRemove).emit('removedFromGroup', { chatId, groupName: req.chat.name, actorName: adminName });
+
+            // به سایر اعضای گروه اطلاع بده
+            const chat = req.chat;
+            const membersOfGroup = await chat.getMembers({ attributes: ['id'] });
+            membersOfGroup.forEach(member => {
+                if (member.id !== memberIdToRemove) { // به جز کاربر حذف شده
+                    io.to(member.id).emit('memberRemovedFromGroup', {
+                        chatId,
+                        userIdRemoved: memberIdToRemove,
+                        actor: {id: adminUser.id, name: adminName }
+                    });
+                    io.to(member.id).emit('newMessage', { ...systemMessage.toJSON(), tempId: `sys_${Date.now()}` });
+                }
+            });
+        }
+
+        res.status(200).json({ success: true, message: 'User removed from the group successfully.' });
+
+    } catch (error) {
+        if (!t.finished) await t.rollback();
+        console.error('Error removing member from group:', error);
+        res.status(500).json({ success: false, message: 'Server error while removing member.' });
+    }
+};
