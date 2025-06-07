@@ -159,14 +159,21 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
     }, [selectedChat, currentUser]);
 
 
-    const handleMessageStatusUpdate = useCallback((statusUpdate) => { /* ... (مانند قبل) ... */
+    const handleMessageStatusUpdate = useCallback((statusUpdate) => {
+        // statusUpdate: { messageId, chatId, status: 'delivered' | 'read', recipientId }
         if (selectedChat?.id && statusUpdate.chatId === selectedChat.id) {
             setMessages(prevMessages => prevMessages.map(msg => {
                 if (msg.id === statusUpdate.messageId && msg.senderId === currentUser?.id) {
-                    let newStatus = msg.deliveryStatus;
-                    if (statusUpdate.status === 'delivered' && newStatus !== 'read') newStatus = 'delivered';
-                    if (statusUpdate.status === 'read') newStatus = 'read'; // read اولویت دارد
-                    return {...msg, deliveryStatus: newStatus, readByRecipient: newStatus === 'read'};
+                    // فقط پیام های ارسالی خودمان را آپدیت می کنیم
+                    let newDeliveryStatus = msg.deliveryStatus;
+
+                    // اولویت وضعیت ها: read > delivered > sent > sending
+                    if (statusUpdate.status === 'read') {
+                        newDeliveryStatus = 'read';
+                    } else if (statusUpdate.status === 'delivered' && newDeliveryStatus !== 'read') {
+                        newDeliveryStatus = 'delivered';
+                    }
+                    return { ...msg, deliveryStatus: newDeliveryStatus, readByRecipient: newDeliveryStatus === 'read' };
                 }
                 return msg;
             }));
@@ -174,23 +181,19 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
     }, [selectedChat, currentUser]);
 
 
-    const handleMessagesReadByOther = useCallback((readData) => { /* ... (مانند قبل) ... */
+    const handleMessagesReadByOther = useCallback((readData) => {
+        // readData: { chatId, readerId, lastReadMessageId (یا messageId اگر برای هر پیام است) }
         if (selectedChat?.id && readData.chatId === selectedChat.id && readData.readerId !== currentUser?.id) {
             setMessages(prevMessages => prevMessages.map(msg => {
-                if (msg.senderId === currentUser?.id) {
-                    // A_REFACTOR: مقایسه دقیق تر با lastReadMessageId
-                    // اگر پیام قبل یا مساوی lastReadMessageId است، آن را read کن
-                    // const messageDate = new Date(msg.createdAt);
-                    // const lastReadDate = new Date( (پیام با شناسه readData.lastReadMessageId).createdAt );
-                    // if (messageDate <= lastReadDate) return { ...msg, readByRecipient: true, deliveryStatus: 'read' };
-
-                    // برای سادگی فعلی، همه را read در نظر می گیریم
-                    return {...msg, readByRecipient: true, deliveryStatus: 'read'};
+                if (msg.senderId === currentUser?.id) { // فقط پیام های ارسالی خودمان
+                    if (msg.id === readData.messageId || (readData.lastReadMessageId && msg.id <= readData.lastReadMessageId /* این مقایسه UUID ممکن است دقیق نباشد */)) {
+                        return { ...msg, deliveryStatus: 'read', readByRecipient: true };
+                    }
                 }
                 return msg;
             }));
         }
-    }, [selectedChat, currentUser]); // currentUser از props
+    }, [selectedChat, currentUser]);
 
     useEffect(() => {
         if (selectedChat?.id) { // فقط اگر چتی انتخاب شده listener ها را ثبت کن
@@ -345,11 +348,11 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
             </span>
                     )}
                 </div>
-                {displayInfo.isGroup && (
-                    <button onClick={handleGroupInfoClick} className="chat-header-action-button" title="Group Info">
-                        <InfoIcon/>
-                    </button>
-                )}
+                {/*{displayInfo.isGroup && (*/}
+                {/*    <button onClick={handleGroupInfoClick} className="chat-header-action-button" title="Group Info">*/}
+                {/*        <InfoIcon/>*/}
+                {/*    </button>*/}
+                {/*)}*/}
             </header>
 
             <MessageList

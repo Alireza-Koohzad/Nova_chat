@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import authService from '../services/authService';
+import socketService from '../services/socketService'; // اگر قبلا import نشده
 
 const AuthContext = createContext(null);
 
@@ -58,11 +59,17 @@ export const AuthProvider = ({ children }) => {
     };
 
     const logout = () => {
+        if (socketService.isConnected()) {
+            socketService.disconnect();
+            console.log("Socket disconnected on logout.");
+        } else {
+            console.log("Socket was not connected on logout.");
+        }
         authService.logout();
         setUser(null);
         setToken(null);
         // در فازهای بعدی، اتصال سوکت هم اینجا قطع می‌شود
-        // socketService.disconnect();
+
     };
 
     const value = {

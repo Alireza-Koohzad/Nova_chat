@@ -10,17 +10,17 @@ function MessageItem({message, isOwnMessage}) {
 
     let tickIcon = null;
     if (isOwnMessage) {
-        // deliveryStatus: 'sending', 'sent', 'delivered', 'read'
-        // readByRecipient: boolean (این را می توان از deliveryStatus === 'read' هم نتیجه گرفت)
-        if (message.deliveryStatus === 'read' || message.readByRecipient) {
+        if (message.deliveryStatus === 'read') {
             tickIcon = <span className="message-ticks read">✓✓</span>;
         } else if (message.deliveryStatus === 'delivered') {
             tickIcon = <span className="message-ticks delivered">✓✓</span>;
-        } else if (message.deliveryStatus === 'sent' || (message.id && !message.tempId && !message.deliveryStatus)) {
-            // اگر id دارد و tempId ندارد و deliveryStatus هم ست نشده، یعنی sent
+        } else if (message.deliveryStatus === 'sent') {
             tickIcon = <span className="message-ticks sent">✓</span>;
-        } else if (message.deliveryStatus === 'sending' || message.tempId) {
+        } else if (message.deliveryStatus === 'sending' || message.tempId) { // اگر tempId دارد یعنی در حال ارسال
             tickIcon = <span className="message-ticks sending">🕒</span>;
+        } else if (message.id && !message.tempId && !message.deliveryStatus) {
+            // حالت پیشفرض اگر پیام id دارد ولی هنوز وضعیتی نگرفته (باید sent باشد)
+            tickIcon = <span className="message-ticks sent">✓</span>;
         }
     }
 

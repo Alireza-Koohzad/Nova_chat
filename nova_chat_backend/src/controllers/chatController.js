@@ -175,7 +175,7 @@ exports.createOrGetPrivateChat = async (req, res) => {
             },
             include: [{
                 model: ChatMember,
-                as: 'ChatMembers', // این as باید با چیزی که در Chat.belongsToMany(User, { through: ChatMember ... }) تعریف شده متفاوت باشد یا مستقیم از ChatMember استفاده کنیم
+                as: 'ChatMembersData', // این as باید با چیزی که در Chat.belongsToMany(User, { through: ChatMember ... }) تعریف شده متفاوت باشد یا مستقیم از ChatMember استفاده کنیم
                                    // برای سادگی، مستقیما از ChatMember استفاده می‌کنیم
                 required: true,
                 attributes: [] // ما فقط به وجود رکوردها نیاز داریم
@@ -257,20 +257,32 @@ exports.createOrGetPrivateChat = async (req, res) => {
 // @route   GET /api/chats/:chatId/messages
 // @access  Private
 exports.getChatMessages = async (req, res) => {
-    const {chatId} = req.params;
-    const userId = req.user.id;
-    const limit = parseInt(req.query.limit) || 20;
+    const { chatId } = req.params;
+    const currentUserId = req.user.id;
+    const limit = parseInt(req.query.limit) || 30; // افزایش limit پیش‌فرض
     const offset = parseInt(req.query.offset) || 0;
 
     try {
-        // ۱. بررسی اینکه کاربر عضو چت است
-        const chatMember = await ChatMember.findOne({where: {chatId, userId}});
+        const chatMember = await ChatMember.findOne({ where: { chatId, userId: currentUserId } });
         if (!chatMember) {
-            return res.status(403).json({success: false, message: "You are not a member of this chat."});
+            return res.status(403).json({ success: false, message: "You are not a member of this chat." });
         }
 
-        const messages = await Message.findAll({
-            where: {chatId},
+        const chat = await Chat.findByPk(chatId, {
+            include: [{ // برای دسترسی به اعضا و نوع چت
+                model: User,
+                as: 'members',
+                attributes: ['id'], // فقط ID لازم است
+                through: { model: ChatMember, attributes: ['userId', 'lastReadMessageId', 'role'] }
+            }]
+        });
+
+        if (!chat) {
+            return res.status(404).json({ success: false, message: "Chat not found." });
+        }
+
+        const messagesFromDB = await Message.findAll({
+            where: { chatId },
             include: [
                 {
                     model: User,
@@ -278,17 +290,69 @@ exports.getChatMessages = async (req, res) => {
                     attributes: ['id', 'username', 'displayName', 'profileImageUrl'],
                 },
             ],
-            order: [['createdAt', 'DESC']], // جدیدترین پیام‌ها اول
+            order: [['createdAt', 'DESC']],
             limit,
             offset,
         });
 
-        // پیام‌ها را برعکس کن تا به ترتیب زمانی درست (قدیمی به جدید) برای نمایش در کلاینت باشند
-        res.json(messages.reverse());
+        // پردازش پیام‌ها برای اضافه کردن وضعیت delivery/read
+        const processedMessages = await Promise.all(messagesFromDB.map(async (msg) => {
+            const message = msg.toJSON(); // تبدیل به آبجکت ساده
+            message.deliveryStatus = 'sent'; // پیش فرض برای پیام های قدیمی که از طریق سوکت وضعیت نگرفته اند
+            message.readByRecipient = false;
+
+            if (message.senderId === currentUserId) { // اگر پیام ارسالی توسط کاربر فعلی است
+                if (chat.type === 'private') {
+                    const otherMemberInfo = chat.members.find(m => m.id !== currentUserId)?.ChatMember;
+                    if (otherMemberInfo && otherMemberInfo.lastReadMessageId) {
+                        // آیا پیام فعلی یا پیام‌های قدیمی‌تر از آن، توسط کاربر دیگر خوانده شده؟
+                        // این مقایسه با ID ممکن است دقیق نباشد اگر ID ها ترتیب زمانی ندارند
+                        // بهتر است با createdAt مقایسه شود یا یک کوئری برای شمارش پیام های خوانده نشده زده شود
+                        // ساده سازی: اگر ID پیام فعلی، آخرین پیام خوانده شده توسط دیگری است یا قبل از آن
+                        const lastReadByOther = await Message.findByPk(otherMemberInfo.lastReadMessageId, { attributes: ['createdAt'] });
+                        if (lastReadByOther && new Date(message.createdAt) <= new Date(lastReadByOther.createdAt)) {
+                            message.deliveryStatus = 'read';
+                            message.readByRecipient = true;
+                        } else {
+                            // برای delivered: اگر بخواهیم ذخیره کنیم، باید مکانیزم داشته باشیم
+                            // فعلا اگر read نشده، sent در نظر می گیریم برای تاریخچه
+                            // یا اگر بخواهیم delivered را هم در نظر بگیریم، باید یک فیلد جدا در Message یا جدول MessageReceipts داشته باشیم
+                            message.deliveryStatus = 'delivered'; // فرض می کنیم اگر خوانده نشده، حداقل تحویل داده شده (این فرض ممکن است همیشه درست نباشد)
+                        }
+                    } else {
+                        message.deliveryStatus = 'sent'; // اگر اطلاعات خوانده شدن کاربر دیگر موجود نیست
+                    }
+                } else if (chat.type === 'group') {
+                    // برای گروه، وضعیت read پیچیده است.
+                    // می توان بررسی کرد آیا *حداقل یک* عضو دیگر آن را خوانده یا *همه* خوانده اند.
+                    // ساده سازی: فعلا برای گروه، پیام های ارسالی خودمان را 'delivered' در نظر می گیریم (اگر بخواهیم از 'sent' متفاوت باشد)
+                    // یا اگر می خواهیم دقیق تر باشیم، ببینیم آخرین پیام خوانده شده توسط *هر* عضو دیگر چیست
+                    let someoneElseReadIt = false;
+                    for (const member of chat.members) {
+                        if (member.id !== currentUserId && member.ChatMember?.lastReadMessageId) {
+                            const lastReadByThisMember = await Message.findByPk(member.ChatMember.lastReadMessageId, { attributes: ['createdAt'] });
+                            if (lastReadByThisMember && new Date(message.createdAt) <= new Date(lastReadByThisMember.createdAt)) {
+                                someoneElseReadIt = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (someoneElseReadIt) {
+                        message.deliveryStatus = 'read'; // یا یک وضعیت خاص مثل 'readBySome'
+                        message.readByRecipient = true; // به معنی اینکه حداقل یک نفر خوانده
+                    } else {
+                        message.deliveryStatus = 'delivered'; // فرض بر اینکه به گروه تحویل داده شده
+                    }
+                }
+            }
+            return message;
+        }));
+
+        res.json(processedMessages.reverse()); // برگرداندن به ترتیب زمانی صحیح (قدیمی به جدید)
 
     } catch (error) {
-        console.error('Error fetching messages:', error);
-        res.status(500).json({success: false, message: 'Server error'});
+        console.error('Error fetching messages with status:', error);
+        res.status(500).json({ success: false, message: 'Server error fetching messages' });
     }
 };
 

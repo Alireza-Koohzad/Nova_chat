@@ -104,9 +104,6 @@ io.on('connection', async (socket) => {
     }
 
     socket.on('markMessagesAsRead', async (data) => {
-        // data: { chatId: string, lastSeenMessageId?: string }
-        // lastSeenMessageId آی دی آخرین پیامی است که کاربر دیده.
-        // اگر ارسال نشود، فرض می کنیم تمام پیام های آن چت را خوانده
         const {chatId, lastSeenMessageId} = data;
         const readerUserId = socket.userId;
 
@@ -150,9 +147,9 @@ io.on('connection', async (socket) => {
 
             // ۲. به کاربر(های) دیگر در چت اطلاع بده که پیام‌ها توسط این کاربر خوانده شده‌اند.
             // این اطلاعات برای نمایش "Read by X" یا تیک دوم آبی مفید است.
-            const chat = await Chat.findByPk(chatId, {include: [{model: ChatMember, as: 'ChatMembers'}]});
+            const chat = await Chat.findByPk(chatId, {include: [{model: ChatMember, as: 'ChatMembersData'}]});
             if (chat) {
-                chat.ChatMembers.forEach(member => {
+                chat.ChatMembersData.forEach(member => {
                     // به همه اعضای دیگر (به جز خود خواننده) اطلاع بده
                     if (member.userId !== readerUserId) {
                         io.to(member.userId).emit('messagesReadByRecipient', {
@@ -187,8 +184,6 @@ io.on('connection', async (socket) => {
 
     // رویداد برای ارسال پیام جدید
     socket.on('sendMessage', async (data) => {
-        // data: { chatId: string, content: string, tempId?: string }
-        // tempId یک شناسه موقت از سمت کلاینت برای پیگیری پیام قبل از ذخیره در دیتابیس است
         console.log(`sendMessage event from socket ID: ${socket.id}, User ID: ${socket.userId}, Chat ID: ${data.chatId}, Content: ${data.content}`);
         try {
             const {chatId, content, tempId} = data;
@@ -211,22 +206,17 @@ io.on('connection', async (socket) => {
             await Chat.update({lastMessageId: message.id}, {where: {id: chatId}});
 
             const messageData = message.toJSON();
-            // افزودن اطلاعات فرستنده به پیام (می‌تواند از User.findByPk انجام شود)
-            // const sender = await User.findByPk(senderId, { attributes: ['id', 'username', 'displayName', 'profileImageUrl'] });
-            // messageData.sender = sender;
 
 
             // ۳. ارسال پیام به تمام اعضای چت (در روم مربوطه)
             io.to(chatId).emit('newMessage', {...messageData, tempId}); // ارسال tempId برای تطبیق در کلاینت
 
-            // (اختیاری) ارسال وضعیت Delivered به فرستنده (یا به همه، اگر پیام به گیرنده خاصی رسید)
-            // این بخش پیچیده‌تر می‌شود وقتی که بخواهیم وضعیت Delivered را برای هر گیرنده جداگانه پیگیری کنیم.
             // برای چت خصوصی:
             const chat = await Chat.findByPk(chatId, {
-                include: [{model: ChatMember, as: 'ChatMembers'}] // اطمینان از بارگذاری ChatMembers
+                include: [{model: ChatMember, as: 'ChatMembersData'}] // اطمینان از بارگذاری ChatMembers
             });
             if (chat && chat.type === 'private') {
-                const otherMember = chat.ChatMembers.find(cm => cm.userId !== senderId);
+                const otherMember = chat.ChatMembersData.find(cm => cm.userId !== senderId);
                 if (otherMember) {
                     // بررسی اینکه آیا کاربر دیگر آنلاین است (یعنی سوکتی با userId او متصل است)
                     const recipientSockets = await io.in(otherMember.userId).fetchSockets();
@@ -261,32 +251,45 @@ io.on('connection', async (socket) => {
     });
 
 
-    socket.on('disconnect', async (reason) => { // async اضافه شد
-        console.log(`User disconnected: ${socket.id}, UserID: ${socket.userId}, Reason: ${reason}`);
+    socket.on('disconnect', async (reason) => {
+        const disconnectedSocketId = socket.id; // ID سوکتی که قطع شده
+        const disconnectedUserId = socket.userId; // UserId که به این سوکت associate شده بود
 
-        try {
-            // بررسی اینکه آیا این آخرین سوکت متصل برای این کاربر است
-            // چون کاربر ممکن است از چندین دستگاه/تب متصل باشد
-            const userSockets = await io.in(socket.userId).allSockets();
+        console.log(`[Socket DISCONNECT] Socket ID: ${disconnectedSocketId}, UserID: ${disconnectedUserId}, Reason: ${reason}`);
 
-            if (userSockets.size === 0) { // اگر این آخرین سوکت بود
-                const disconnectedUserId = socket.userId; // userId را قبل از اینکه socket.userId از بین برود ذخیره کن
-                if (disconnectedUserId) {
-                    await User.update({status: 'offline', lastSeenAt: new Date()}, {where: {id: disconnectedUserId}});
+        if (disconnectedUserId) {
+            try {
+                // تاخیر کوتاه برای اطمینان از اینکه همه رویدادهای مربوط به سوکت قبل از شمارش پردازش شده‌اند (اختیاری و برای دیباگ)
+                // await new Promise(resolve => setTimeout(resolve, 100));
 
-                    // به دیگران اطلاع بده که کاربر آفلاین شده
-                    socket.broadcast.emit('userStatusChanged', {
+                // دریافت تمام سوکت‌های متصل به سرور
+                const allConnectedSockets = await io.fetchSockets();
+
+                // فیلتر کردن سوکت‌هایی که هنوز برای همین userId متصل هستند (به جز سوکت فعلی که در حال قطع شدن است)
+                const remainingUserSockets = allConnectedSockets.filter(s => s.userId === disconnectedUserId && s.id !== disconnectedSocketId);
+
+                console.log(`[Socket DISCONNECT] User ${disconnectedUserId} - Sockets remaining for this user: ${remainingUserSockets.length} (excluding the disconnecting one ${disconnectedSocketId})`);
+
+                if (remainingUserSockets.length === 0) {
+                    // این آخرین اتصال این کاربر بود
+                    await User.update({ status: 'offline', lastSeenAt: new Date() }, { where: { id: disconnectedUserId } });
+
+                    // ارسال رویداد به همه کلاینت‌های دیگر
+                    // از io.emit استفاده می‌کنیم تا به همه (به جز این سوکت که دیگر وجود ندارد) ارسال شود
+                    io.emit('userStatusChanged', {
                         userId: disconnectedUserId,
                         status: 'offline',
                         lastSeenAt: new Date()
                     });
-                    console.log(`User ${disconnectedUserId} marked as offline.`);
+                    console.log(`[Socket DISCONNECT] User ${disconnectedUserId} marked as OFFLINE and status broadcasted.`);
+                } else {
+                    console.log(`[Socket DISCONNECT] User ${disconnectedUserId} still has other active sockets. Not marking as offline.`);
                 }
-            } else {
-                console.log(`User ${socket.userId} still has other active sockets: ${userSockets.size}`);
+            } catch (error) {
+                console.error(`[Socket DISCONNECT] Error updating user ${disconnectedUserId} status on disconnect:`, error);
             }
-        } catch (error) {
-            console.error("Error updating user status on disconnect:", error);
+        } else {
+            console.log(`[Socket DISCONNECT] Socket ${disconnectedSocketId} disconnected without a userId (was not fully authenticated or userId was cleared).`);
         }
     });
 });
@@ -309,4 +312,4 @@ const startServer = async () => {
 
 startServer();
 
-module.exports = { app, server, io };
+
