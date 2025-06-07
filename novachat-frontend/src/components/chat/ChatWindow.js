@@ -6,6 +6,7 @@ import chatServiceAPI from '../../services/chatServiceAPI';
 import socketService from '../../services/socketService';
 import {useAuth} from '../../contexts/AuthContext'; // currentUser از اینجا نمی آید، از props می آید
 import './ChatWindow.css';
+import {UsersIcon as GroupAvatarIcon} from '../icons/index'; // آیکون ها
 
 const MESSAGES_PER_PAGE = 30; // یا هر تعداد دلخواه دیگر
 
@@ -245,16 +246,18 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
                 name: otherMember?.displayName || otherMember?.username || 'User',
                 recipientId: otherMember?.id,
                 avatarInitial: (otherMember?.displayName || otherMember?.username || 'U').substring(0, 1).toUpperCase(),
+                profileImageUrl: otherMember?.profileImageUrl,
                 isGroup: false,
-                members: selectedChat.members // اعضا برای نمایش وضعیت آنلاین
+                members: selectedChat.members
             };
         } else if (selectedChat.type === 'group') {
             return {
                 name: selectedChat.name || 'Group Chat',
                 recipientId: null,
-                avatarInitial: (selectedChat.name || 'G').substring(0, 1).toUpperCase(),
+                avatarInitial: null, // از آیکون گروه استفاده می کنیم
+                profileImageUrl: selectedChat.groupImageUrl, // اگر تصویر گروه دارید
                 isGroup: true,
-                members: selectedChat.members || [], // لیست اعضای گروه
+                members: selectedChat.members || [],
                 creatorId: selectedChat.creatorId
             };
         }
@@ -262,16 +265,21 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
     }, [selectedChat, currentUser]);
 
     const displayInfo = getChatDisplayInfo();
+
     let statusOrMembersText = '';
     if (displayInfo.isGroup) {
         const onlineMembersCount = displayInfo.members.filter(m => userStatuses[m.id]?.status === 'online').length;
-        statusOrMembersText = `${displayInfo.members.length} members, ${onlineMembersCount} online`;
-        // یا می‌توانید نام چند عضو آنلاین را لیست کنید
+        statusOrMembersText = `${displayInfo.members.length} member${displayInfo.members.length !== 1 ? 's' : ''}`;
+        if (displayInfo.members.length > 0) { // فقط اگر عضوی هست، تعداد آنلاین را نمایش بده
+            statusOrMembersText += `, ${onlineMembersCount} online`;
+        }
     } else if (displayInfo.recipientId) {
         const recipientStatusInfo = userStatuses[displayInfo.recipientId];
         if (recipientStatusInfo) {
-            statusOrMembersText = recipientStatusInfo.status;
-            if (recipientStatusInfo.status === 'offline' && recipientStatusInfo.lastSeenAt) {
+            statusOrMembersText = recipientStatusInfo.status; // متغیر statusText را باید تعریف کنید
+            if (recipientStatusInfo.status === 'online') {
+                statusOrMembersText = 'online';
+            } else if (recipientStatusInfo.status === 'offline' && recipientStatusInfo.lastSeenAt) {
                 const lastSeenDate = new Date(recipientStatusInfo.lastSeenAt);
                 statusOrMembersText = `last seen ${lastSeenDate.toLocaleTimeString([], {
                     hour: '2-digit',
@@ -280,7 +288,11 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
                 if (lastSeenDate.toLocaleDateString() !== new Date().toLocaleDateString()) {
                     statusOrMembersText += ` on ${lastSeenDate.toLocaleDateString()}`;
                 }
+            } else {
+                statusOrMembersText = 'offline'; // اگر lastSeenAt ندارد
             }
+        } else {
+            statusOrMembersText = 'offline'; // اگر اطلاعات وضعیت موجود نیست
         }
     }
 
@@ -308,10 +320,18 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
     return (
         <main className="chat-window-container">
             <header className="chat-window-header">
-                <div className="chat-header-avatar"
-                     style={{backgroundColor: displayInfo.isGroup ? '#4CAF50' : '#bdbdbd'}}>
-                    {displayInfo.isGroup ? <GroupIcon/> : displayInfo.avatarInitial}
-                    {/* برای چت خصوصی، نقطه وضعیت آنلاین کاربر مقابل را نمایش بده */}
+                <div
+                    className="chat-header-avatar"
+                    style={{
+                        backgroundColor: displayInfo.isGroup ? '#00796b' : (displayInfo.profileImageUrl ? 'transparent' : '#bdbdbd')
+                    }}
+                >
+                    {displayInfo.isGroup ?
+                        (displayInfo.profileImageUrl ? <img src={displayInfo.profileImageUrl} alt="G"/> :
+                            <GroupAvatarIcon/>) :
+                        (displayInfo.profileImageUrl ? <img src={displayInfo.profileImageUrl}
+                                                            alt={displayInfo.name?.substring(0, 1)}/> : displayInfo.avatarInitial)
+                    }
                     {!displayInfo.isGroup && displayInfo.recipientId && userStatuses[displayInfo.recipientId]?.status === 'online' && (
                         <span className="header-status-dot online"></span>
                     )}
@@ -320,15 +340,14 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
                     <h3>{displayInfo.name}</h3>
                     {statusOrMembersText && (
                         <span
-                            className={`chat-status-text ${displayInfo.isGroup ? 'group-info' : userStatuses[displayInfo.recipientId]?.status}`}>
+                            className={`chat-status-text ${displayInfo.isGroup ? 'group-info' : (userStatuses[displayInfo.recipientId]?.status || 'offline')}`}>
               {statusOrMembersText}
             </span>
                     )}
                 </div>
-                {/* دکمه برای مشاهده اطلاعات گروه/اعضا (فاز بعدی) */}
                 {displayInfo.isGroup && (
-                    <button className="chat-header-action-button" title="Group Info">
-                        <InfoIcon/> {/* یا آیکون سه نقطه برای منو */}
+                    <button onClick={handleGroupInfoClick} className="chat-header-action-button" title="Group Info">
+                        <InfoIcon/>
                     </button>
                 )}
             </header>
@@ -351,7 +370,6 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
     );
 }
 
-const GroupIcon = () => <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"></path></svg>;
-const InfoIcon = () => <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"></path></svg>;
+
 
 export default ChatWindow;
