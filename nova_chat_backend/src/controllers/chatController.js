@@ -482,3 +482,114 @@ exports.addMemberToGroup = async (req, res) => {
         res.status(500).json({ success: false, message: 'Server error while adding member.' });
     }
 };
+
+
+// @desc    Leave a group chat
+// @route   DELETE /api/chats/:chatId/members/me  (یا POST /api/chats/:chatId/leave)
+// @access  Private (Member of the group)
+exports.leaveGroupChat = async (req, res) => {
+    const { chatId } = req.params;
+    const userIdLeaving = req.user.id;
+    // const chat = req.chat; // اگر از middleware ای استفاده می کنید که چت را attach می کند
+
+    const t = await sequelize.transaction();
+    try {
+        const chat = await Chat.findByPk(chatId); // ابتدا چت را پیدا کن
+        if (!chat) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: 'Chat not found.' });
+        }
+        if (chat.type !== 'group') {
+            await t.rollback();
+            return res.status(400).json({ success: false, message: 'This operation is only for group chats.' });
+        }
+
+        const membership = await ChatMember.findOne({
+            where: { chatId, userId: userIdLeaving },
+            transaction: t,
+        });
+
+        if (!membership) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: 'You are not a member of this group.' });
+        }
+
+        await membership.destroy({ transaction: t });
+
+        // منطق مدیریت ادمین:
+        // اگر کاربر خارج شده ادمین بود و آخرین ادمین گروه بود، چه اتفاقی بیفتد؟
+        // ۱. گروه حذف شود؟
+        // ۲. یک عضو دیگر به صورت تصادفی ادمین شود؟
+        // ۳. گروه بدون ادمین بماند (باید منطق برنامه این را پشتیبانی کند)؟
+        // فعلا این بخش را ساده نگه می داریم.
+        if (membership.role === 'admin') {
+            const remainingAdmins = await ChatMember.count({ where: { chatId, role: 'admin' }, transaction: t});
+            if (remainingAdmins === 0) {
+                // اگر هیچ ادمین دیگری باقی نماند
+                const remainingMembers = await ChatMember.count({ where: { chatId }, transaction: t });
+                if (remainingMembers > 0) {
+                    // یک عضو دیگر را به ادمین ارتقا بده (مثلا اولین عضو باقی مانده بر اساس joinedAt)
+                    const newAdminCandidate = await ChatMember.findOne({
+                        where: { chatId },
+                        order: [['joinedAt', 'ASC']], // یا createdAt جدول ChatMember
+                        transaction: t,
+                    });
+                    if (newAdminCandidate) {
+                        await newAdminCandidate.update({ role: 'admin' }, { transaction: t });
+                        // ایجاد پیام سیستمی برای ارتقا ادمین جدید
+                        const newAdminUser = await User.findByPk(newAdminCandidate.userId, { attributes: ['displayName', 'username']});
+                        const newAdminName = newAdminUser.displayName || newAdminUser.username;
+                        await createSystemMessage(chatId, `${newAdminName} is now an admin.`, t);
+                    }
+                } else {
+                    // اگر هیچ عضوی باقی نماند، گروه را حذف کن
+                    await Chat.destroy({ where: { id: chatId }, transaction: t });
+                    console.log(`Group ${chatId} deleted as last member (admin) left.`);
+                    // TODO: به سوکت ها اطلاع داده شود که گروه حذف شده
+                }
+            }
+        }
+
+
+        // ایجاد پیام سیستمی
+        const userLeavingDetails = req.user;
+        const userName = userLeavingDetails.displayName || userLeavingDetails.username;
+        const systemMessageContent = `${userName} left the group.`;
+        const systemMessage = await createSystemMessage(chatId, systemMessageContent, t);
+
+        // آپدیت lastMessageId و updatedAt چت
+        // فقط اگر گروه هنوز وجود دارد
+        const groupExistsAfterLeave = await Chat.findByPk(chatId, { transaction: t, attributes: ['id']});
+        if (groupExistsAfterLeave) {
+            await Chat.update(
+                { lastMessageId: systemMessage.id, updatedAt: new Date() },
+                { where: { id: chatId }, transaction: t }
+            );
+        }
+
+        await t.commit();
+
+        // ** اطلاع رسانی از طریق سوکت **
+        if (groupExistsAfterLeave && io) {
+            const membersOfGroup = await chat.getMembers({ attributes: ['id'] }); // اعضای باقی مانده
+            membersOfGroup.forEach(member => {
+                io.to(member.id).emit('memberLeftGroup', {
+                    chatId,
+                    userId: userIdLeaving,
+                    actor: {id: userIdLeaving, name: userName }
+                });
+                io.to(member.id).emit('newMessage', { ...systemMessage.toJSON(), tempId: `sys_${Date.now()}` });
+            });
+            // به خود کاربر خارج شده هم اطلاع بده که با موفقیت خارج شده (اختیاری، چون کلاینت معمولا UI را آپدیت می کند)
+            io.to(userIdLeaving).emit('leftGroupSuccessfully', { chatId });
+        }
+
+
+        res.status(200).json({ success: true, message: 'Successfully left the group.' });
+
+    } catch (error) {
+        if (!t.finished) await t.rollback();
+        console.error('Error leaving group:', error);
+        res.status(500).json({ success: false, message: 'Server error while leaving group.' });
+    }
+};

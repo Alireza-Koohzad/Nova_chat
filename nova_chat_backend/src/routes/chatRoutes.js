@@ -6,6 +6,7 @@ const {
     getChatMessages,
     createGroupChat,
     addMemberToGroup,
+    leaveGroupChat,
 } = require('../controllers/chatController'); // این فایل را ایجاد خواهیم کرد
 const {protect} = require('../middleware/authMiddleware');
 const { ensureGroupAdmin } = require('../middleware/groupAdminMiddleware');
@@ -230,6 +231,41 @@ router.post(
     ],
     addMemberToGroup
 );
+
+
+/**
+ * @swagger
+ * /api/chats/{chatId}/members/me:
+ *   delete:
+ *     summary: Leave a group chat
+ *     tags: [Chats]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: chatId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The ID of the group chat to leave
+ *     responses:
+ *       200:
+ *         description: Successfully left the group
+ *       400:
+ *         description: Bad request (e.g., not a group chat)
+ *       401:
+ *         description: Not authorized
+ *       404:
+ *         description: Chat not found or user not a member
+ */
+router.delete(
+    '/:chatId/members/me', // 'me' به معنی کاربر فعلی است
+    protect, // فقط کاربر لاگین کرده
+    // نیازی به ensureGroupAdmin نیست، چون هر عضوی می تواند خارج شود
+    leaveGroupChat
+);
+
 
 
 module.exports = router;
