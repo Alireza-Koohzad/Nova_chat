@@ -6,6 +6,8 @@ const Message = require('../models/Message');
 const ChatMember = require('../models/ChatMember');
 const {sequelize} = require('../config/database'); // برای تراکنش‌ها
 const { validationResult } = require('express-validator');
+const { io } = require('../server');
+
 
 // Helper function to format chat response
 const formatChatResponse = async (chat, currentUserId) => {

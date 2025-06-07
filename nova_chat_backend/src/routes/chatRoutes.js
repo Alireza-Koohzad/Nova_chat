@@ -5,9 +5,10 @@ const {
     getUserChats,
     getChatMessages,
     createGroupChat,
-    // addMemberToGroup,
+    addMemberToGroup,
 } = require('../controllers/chatController'); // این فایل را ایجاد خواهیم کرد
-const {protect} = require('../middleware/authMiddleware'); // میان‌افزار احراز هویت HTTP
+const {protect} = require('../middleware/authMiddleware');
+const { ensureGroupAdmin } = require('../middleware/groupAdminMiddleware');
 const {body} = require('express-validator'); // برای اعتبارسنجی
 const router = express.Router();
 
@@ -166,6 +167,68 @@ router.post(
         body('memberIds.*').optional().isUUID().withMessage('Each memberId must be a valid UUID.')
     ],
     createGroupChat
+);
+
+/**
+ * @swagger
+ * /api/chats/{chatId}/members:
+ *   post:
+ *     summary: Add a member to a group chat (Admin only)
+ *     tags: [Chats]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: chatId
+ *         required: true
+ *         schema:
+ *           type: string
+ *           format: uuid
+ *         description: The ID of the group chat
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - userIdToAdd
+ *             properties:
+ *               userIdToAdd:
+ *                 type: string
+ *                 format: uuid
+ *                 description: The ID of the user to add
+ *     responses:
+ *       200:
+ *         description: User added successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                  success:
+ *                      type: boolean
+ *                  message:
+ *                      type: string
+ *                  member: # اطلاعات عضو اضافه شده
+ *                      $ref: '#/components/schemas/ChatMemberResponse' # از schema موجود استفاده کنید
+ *       400:
+ *         description: Bad request (e.g., user already member, missing userIdToAdd)
+ *       401:
+ *         description: Not authorized
+ *       403:
+ *         description: Forbidden (not an admin or not a member of the group)
+ *       404:
+ *         description: Chat or User to add not found
+ */
+router.post(
+    '/:chatId/members',
+    protect,
+    ensureGroupAdmin, // Middleware برای بررسی اینکه کاربر ادمین گروه است
+    [
+        body('userIdToAdd').isUUID().withMessage('Valid User ID to add is required.')
+    ],
+    addMemberToGroup
 );
 
 
