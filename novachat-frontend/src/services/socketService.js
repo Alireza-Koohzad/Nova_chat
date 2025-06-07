@@ -136,6 +136,10 @@ const socketService = {
             }
         }
     },
+    onNewChat: (callback) => { if (socket) socket.on('newChat', callback); },
+    offNewChat: (callback) => { if (socket) socket.off('newChat', callback); },
+
+
 
     // --- Error Listeners ---
     onMessageError: (callback) => {
