@@ -1,11 +1,11 @@
 import React from 'react';
 import './MessageItem.css';
 
-function MessageItem({ message, isOwnMessage }) {
+function MessageItem({message, isOwnMessage}) {
     const formatDate = (dateString) => {
         if (!dateString) return '';
         const date = new Date(dateString);
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
     };
 
     let tickIcon = null;
@@ -24,8 +24,24 @@ function MessageItem({ message, isOwnMessage }) {
         }
     }
 
+    const renderMessageContent = () => { /* ... (مانند قبل برای image و text) ... */
+    };
+
+    if (message.contentType === 'system') {
+        return (
+            <div className="message-item-wrapper system-message-wrapper">
+                <div className="system-message-content">
+                    {message.content}
+                    <span className="message-timestamp system-timestamp">{formatDate(message.createdAt)}</span>
+                </div>
+            </div>
+        );
+    }
+
+
     return (
-        <div className={`message-item-wrapper ${isOwnMessage ? 'own-message' : 'other-message'}`}>
+        <div
+            className={`message-item-wrapper ${isOwnMessage ? 'own-message' : 'other-message'} message-type-${message.contentType || 'text'}`}>
             <div className="message-bubble">
                 {!isOwnMessage && message.sender && (
                     <div className="message-sender-name">{message.sender.displayName || message.sender.username}</div>

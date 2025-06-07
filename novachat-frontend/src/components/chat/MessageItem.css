@@ -77,3 +77,26 @@
 .message-ticks.sent { color: #777; }
 .message-ticks.delivered { color: #555; }
 .message-ticks.read { color: #34b7f1; } /* آبی */
+
+
+.system-message-wrapper {
+    align-self: center; /* در وسط چت */
+    margin: 10px 0;
+    max-width: 80%; /* یا عرض دلخواه */
+}
+
+.system-message-content {
+    background-color: #e1f5fe; /* یک رنگ ملایم برای پیام سیستمی */
+    color: #01579b;
+    padding: 6px 10px;
+    border-radius: 10px;
+    font-size: 0.85em;
+    text-align: center;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.05);
+}
+.system-message-content .system-timestamp {
+    display: block; /* یا inline-block با margin */
+    font-size: 0.8em; /* کوچکتر از متن اصلی */
+    color: #0277bd; /* کمی تیره‌تر */
+    margin-top: 3px;
+}
