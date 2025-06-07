@@ -153,7 +153,7 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
 
     const handleTypingEvent = useCallback((typingData) => { /* ... (مانند قبل) ... */
         if (selectedChat?.id && typingData.chatId === selectedChat.id && typingData.userId !== currentUser?.id) {
-            setTypingUsers(prev => ({ ...prev, [typingData.userId]: typingData.isTyping }));
+            setTypingUsers(prev => ({...prev, [typingData.userId]: typingData.isTyping}));
         }
     }, [selectedChat, currentUser]);
 
@@ -165,7 +165,7 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
                     let newStatus = msg.deliveryStatus;
                     if (statusUpdate.status === 'delivered' && newStatus !== 'read') newStatus = 'delivered';
                     if (statusUpdate.status === 'read') newStatus = 'read'; // read اولویت دارد
-                    return { ...msg, deliveryStatus: newStatus, readByRecipient: newStatus === 'read' };
+                    return {...msg, deliveryStatus: newStatus, readByRecipient: newStatus === 'read'};
                 }
                 return msg;
             }));
@@ -184,7 +184,7 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
                     // if (messageDate <= lastReadDate) return { ...msg, readByRecipient: true, deliveryStatus: 'read' };
 
                     // برای سادگی فعلی، همه را read در نظر می گیریم
-                    return { ...msg, readByRecipient: true, deliveryStatus: 'read' };
+                    return {...msg, readByRecipient: true, deliveryStatus: 'read'};
                 }
                 return msg;
             }));
@@ -236,33 +236,50 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
         socketService.sendMessage(messageData);
     };
 
-    const getChatDisplayInfo = useCallback(() => { // با useCallback برای پایداری
-        if (!selectedChat) return {name: '', recipientId: null, avatarInitial: '?'};
+    const getChatDisplayInfo = useCallback(() => {
+        if (!selectedChat) return {name: '', recipientId: null, avatarInitial: '?', isGroup: false, members: []};
+
         if (selectedChat.type === 'private' && selectedChat.members) {
-            const otherMember = selectedChat.members.find(m => m.id !== currentUser?.id); // currentUser از props
+            const otherMember = selectedChat.members.find(m => m.id !== currentUser?.id);
             return {
                 name: otherMember?.displayName || otherMember?.username || 'User',
                 recipientId: otherMember?.id,
                 avatarInitial: (otherMember?.displayName || otherMember?.username || 'U').substring(0, 1).toUpperCase(),
+                isGroup: false,
+                members: selectedChat.members // اعضا برای نمایش وضعیت آنلاین
+            };
+        } else if (selectedChat.type === 'group') {
+            return {
+                name: selectedChat.name || 'Group Chat',
+                recipientId: null,
+                avatarInitial: (selectedChat.name || 'G').substring(0, 1).toUpperCase(),
+                isGroup: true,
+                members: selectedChat.members || [], // لیست اعضای گروه
+                creatorId: selectedChat.creatorId
             };
         }
-        return {
-            name: selectedChat.name || 'Group Chat',
-            recipientId: null,
-            avatarInitial: (selectedChat.name || 'G').substring(0, 1).toUpperCase()
-        };
-    }, [selectedChat, currentUser]); // currentUser از props
+        return {name: 'Chat', recipientId: null, avatarInitial: '?', isGroup: false, members: []};
+    }, [selectedChat, currentUser]);
 
     const displayInfo = getChatDisplayInfo();
-    const recipientStatusInfo = displayInfo.recipientId ? userStatuses[displayInfo.recipientId] : null;
-    let statusText = '';
-    if (recipientStatusInfo) {
-        statusText = recipientStatusInfo.status;
-        if (recipientStatusInfo.status === 'offline' && recipientStatusInfo.lastSeenAt) {
-            const lastSeenDate = new Date(recipientStatusInfo.lastSeenAt);
-            statusText = `last seen ${lastSeenDate.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}`;
-            if (lastSeenDate.toLocaleDateString() !== new Date().toLocaleDateString()) {
-                statusText += ` on ${lastSeenDate.toLocaleDateString()}`;
+    let statusOrMembersText = '';
+    if (displayInfo.isGroup) {
+        const onlineMembersCount = displayInfo.members.filter(m => userStatuses[m.id]?.status === 'online').length;
+        statusOrMembersText = `${displayInfo.members.length} members, ${onlineMembersCount} online`;
+        // یا می‌توانید نام چند عضو آنلاین را لیست کنید
+    } else if (displayInfo.recipientId) {
+        const recipientStatusInfo = userStatuses[displayInfo.recipientId];
+        if (recipientStatusInfo) {
+            statusOrMembersText = recipientStatusInfo.status;
+            if (recipientStatusInfo.status === 'offline' && recipientStatusInfo.lastSeenAt) {
+                const lastSeenDate = new Date(recipientStatusInfo.lastSeenAt);
+                statusOrMembersText = `last seen ${lastSeenDate.toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                })}`;
+                if (lastSeenDate.toLocaleDateString() !== new Date().toLocaleDateString()) {
+                    statusOrMembersText += ` on ${lastSeenDate.toLocaleDateString()}`;
+                }
             }
         }
     }
@@ -291,18 +308,29 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
     return (
         <main className="chat-window-container">
             <header className="chat-window-header">
-                <div className="chat-header-avatar">
-                    {displayInfo.avatarInitial}
-                    {recipientStatusInfo?.status === 'online' && <span className="header-status-dot online"></span>}
+                <div className="chat-header-avatar"
+                     style={{backgroundColor: displayInfo.isGroup ? '#4CAF50' : '#bdbdbd'}}>
+                    {displayInfo.isGroup ? <GroupIcon/> : displayInfo.avatarInitial}
+                    {/* برای چت خصوصی، نقطه وضعیت آنلاین کاربر مقابل را نمایش بده */}
+                    {!displayInfo.isGroup && displayInfo.recipientId && userStatuses[displayInfo.recipientId]?.status === 'online' && (
+                        <span className="header-status-dot online"></span>
+                    )}
                 </div>
                 <div className="chat-header-info">
                     <h3>{displayInfo.name}</h3>
-                    {statusText && (
-                        <span className={`chat-status-text ${recipientStatusInfo?.status}`}>
-              {statusText}
+                    {statusOrMembersText && (
+                        <span
+                            className={`chat-status-text ${displayInfo.isGroup ? 'group-info' : userStatuses[displayInfo.recipientId]?.status}`}>
+              {statusOrMembersText}
             </span>
                     )}
                 </div>
+                {/* دکمه برای مشاهده اطلاعات گروه/اعضا (فاز بعدی) */}
+                {displayInfo.isGroup && (
+                    <button className="chat-header-action-button" title="Group Info">
+                        <InfoIcon/> {/* یا آیکون سه نقطه برای منو */}
+                    </button>
+                )}
             </header>
 
             <MessageList
@@ -322,5 +350,8 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
         </main>
     );
 }
+
+const GroupIcon = () => <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"></path></svg>;
+const InfoIcon = () => <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"></path></svg>;
 
 export default ChatWindow;
