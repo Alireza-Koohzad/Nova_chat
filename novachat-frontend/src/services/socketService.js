@@ -139,6 +139,14 @@ const socketService = {
     onNewChat: (callback) => { if (socket) socket.on('newChat', callback); },
     offNewChat: (callback) => { if (socket) socket.off('newChat', callback); },
 
+    onMemberAddedToGroup: (callback) => { if (socket) socket.on('memberAddedToGroup', callback); },
+    offMemberAddedToGroup: (callback) => { if (socket) socket.off('memberAddedToGroup', callback); },
+
+    onMemberLeftGroup: (callback) => { if (socket) socket.on('memberLeftGroup', callback); },
+    offMemberLeftGroup: (callback) => { if (socket) socket.off('memberLeftGroup', callback); },
+
+    onMemberRemovedFromGroup: (callback) => { if (socket) socket.on('memberRemovedFromGroup', callback); },
+    offMemberRemovedFromGroup: (callback) => { if (socket) socket.off('memberRemovedFromGroup', callback); },
 
 
     // --- Error Listeners ---
