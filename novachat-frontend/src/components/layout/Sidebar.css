@@ -108,3 +108,12 @@
     text-align: center;
     color: #757575;
 }
+.chat-item-avatar-wrapper .chat-item-avatar svg { /* برای آیکون گروه */
+    width: 20px; /* یا اندازه دلخواه */
+    height: 20px;
+}
+.member-count {
+    font-size: 0.75em;
+    color: #888;
+    margin-left: 5px;
+}

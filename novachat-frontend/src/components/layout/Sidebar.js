@@ -39,13 +39,19 @@ function Sidebar({chats, setChats, onSelectChat, currentUser, userStatuses, sele
                 name: otherMember?.displayName || otherMember?.username || 'User',
                 recipientId: otherMember?.id,
                 avatarInitial: (otherMember?.displayName || otherMember?.username || 'U').substring(0, 1).toUpperCase(),
+                isGroup: false,
+            };
+        } else if (chat.type === 'group') {
+            return {
+                name: chat.name || 'Group Chat',
+                recipientId: null, // برای گروه، recipientId خاصی وجود ندارد
+                avatarInitial: (chat.name || 'G').substring(0, 1).toUpperCase(),
+                isGroup: true,
+                memberCount: chat.members?.length || 0
             };
         }
-        return {
-            name: chat.name || 'Group Chat',
-            recipientId: null,
-            avatarInitial: (chat.name || 'G').substring(0, 1).toUpperCase()
-        };
+        // پیش فرض اگر نوع چت مشخص نباشد (نباید اتفاق بیفتد)
+        return { name: 'Unknown Chat', avatarInitial: '?', isGroup: false };
     };
 
     // تابع برای اضافه یا آپدیت کردن یک چت در لیست (مثلا پس از شروع چت جدید)
@@ -65,6 +71,8 @@ function Sidebar({chats, setChats, onSelectChat, currentUser, userStatuses, sele
             }
         });
     };
+
+
 
 
     if (loading) return <div className="sidebar-status-message">Loading chats...</div>;
