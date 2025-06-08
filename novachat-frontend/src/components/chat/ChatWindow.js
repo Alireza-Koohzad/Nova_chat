@@ -4,218 +4,223 @@ import MessageList from './MessageList';
 import MessageInput from './MessageInput';
 import chatServiceAPI from '../../services/chatServiceAPI';
 import socketService from '../../services/socketService';
-import {useAuth} from '../../contexts/AuthContext'; // currentUser از اینجا نمی آید، از props می آید
+import {useAuth} from '../../contexts/AuthContext';
 import './ChatWindow.css';
-import {UsersIcon as GroupAvatarIcon} from '../icons/index'; // آیکون ها
+import { UsersIcon, MessageSquareIcon } from '../icons'; // Added MessageSquareIcon for placeholder
 
-const MESSAGES_PER_PAGE = 30; // یا هر تعداد دلخواه دیگر
+const MESSAGES_PER_PAGE = 30;
 
-function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAsRead}) {
+function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAsRead}) { // Removed onChatDetailsUpdated
     const [messages, setMessages] = useState([]);
-    const [isLoadingMessages, setIsLoadingMessages] = useState(false); // برای بارگذاری اولیه
-    const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false); // برای بارگذاری قدیمی‌ترها
-    const [hasMoreMessages, setHasMoreMessages] = useState(true); // آیا پیام قدیمی‌تری هست؟
-    const [currentPage, setCurrentPage] = useState(1); // برای offset یا page number
+    const [isLoadingInitialMessages, setIsLoadingInitialMessages] = useState(false);
+    const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+    const [hasMoreMessages, setHasMoreMessages] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
     const [typingUsers, setTypingUsers] = useState({});
     const {token} = useAuth();
-    const messagesListRef = useRef(null); // Ref برای div ای که اسکرول دارد (MessageList)
-    const messagesEndRef = useRef(null); // Ref برای انتهای لیست پیام ها (اسکرول به پایین)
-    const [initialLoadComplete, setInitialLoadComplete] = useState(false); // برای جلوگیری از اسکرول در بارگذاری اولیه
+
+    const messagesListRef = useRef(null);
+    const messagesEndRef = useRef(null); // Ref for the actual end of messages
+    const [isNearBottom, setIsNearBottom] = useState(true); // Track if user is near the bottom
 
     const scrollToBottom = useCallback((behavior = "smooth") => {
-        messagesEndRef.current?.scrollIntoView({behavior});
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({behavior, block: "end"});
+        }
     }, []);
+
+    const handleScroll = useCallback(() => {
+        if (messagesListRef.current) {
+            const { scrollTop, scrollHeight, clientHeight } = messagesListRef.current;
+            setIsNearBottom(scrollHeight - scrollTop <= clientHeight + (clientHeight * 0.5));
+
+            if (scrollTop === 0 && hasMoreMessages && !isLoadingInitialMessages && !isLoadingOlderMessages) {
+                //currentPage is already the current page, so for next older page, it's currentPage + 1
+                loadMessages(selectedChat.id, currentPage + 1, true);
+            }
+        }
+    }, [hasMoreMessages, isLoadingInitialMessages, isLoadingOlderMessages, selectedChat, currentPage]);
+
+    // Attach scroll listener
+    useEffect(() => {
+        const listElement = messagesListRef.current;
+        if (listElement) {
+            listElement.addEventListener('scroll', handleScroll);
+            return () => listElement.removeEventListener('scroll', handleScroll);
+        }
+    }, [handleScroll]);
+
 
     const loadMessages = useCallback(async (chatId, page = 1, loadOlder = false) => {
         if (!chatId || !token) return;
 
+        const offset = (page - 1) * MESSAGES_PER_PAGE; // Define offset here
+
         if (loadOlder) {
             setIsLoadingOlderMessages(true);
         } else {
-            setIsLoadingMessages(true);
-            setMessages([]); // پاک کردن پیام های قبلی برای بارگذاری اولیه چت جدید
-            setCurrentPage(1); // ریست کردن صفحه
-            setHasMoreMessages(true); // ریست کردن وضعیت hasMore
-            setInitialLoadComplete(false);
+            setIsLoadingInitialMessages(true);
+            setMessages([]); // Reset messages for new chat or refresh
+            setCurrentPage(1); // Reset page for new chat or refresh
+            setHasMoreMessages(true); // Assume there are messages until API confirms otherwise
         }
 
         try {
-            const offset = (page - 1) * MESSAGES_PER_PAGE;
             const fetchedMessages = await chatServiceAPI.getChatMessages(chatId, token, MESSAGES_PER_PAGE, offset);
-            const sortedMessages = fetchedMessages.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+            // Messages from API are already sorted oldest first (ASC) if API guarantees order
+            const sortedMessages = fetchedMessages;
 
-            if (loadOlder) {
-                setMessages(prevMessages => [...sortedMessages, ...prevMessages]); // پیام های قدیمی تر به ابتدا اضافه می شوند
-                // حفظ موقعیت اسکرول (این بخش می تواند پیچیده باشد)
-                // یک راه ساده: اگر به بالا اسکرول کرده بودیم، سعی کن همانجا بمانیم
-                if (messagesListRef.current) {
-                    const oldScrollHeight = messagesListRef.current.scrollHeight;
-                    // پس از آپدیت state، اسکرول را تنظیم کن (در یک microtask)
-                    requestAnimationFrame(() => {
-                        if (messagesListRef.current) {
-                            messagesListRef.current.scrollTop += (messagesListRef.current.scrollHeight - oldScrollHeight);
-                        }
-                    });
+            const oldScrollHeight = messagesListRef.current?.scrollHeight || 0;
+            const oldScrollTop = messagesListRef.current?.scrollTop || 0;
+
+            setMessages(prevMessages =>
+                loadOlder ? [...sortedMessages, ...prevMessages] : sortedMessages
+            );
+
+            if (loadOlder && messagesListRef.current && sortedMessages.length > 0) {
+                requestAnimationFrame(() => { // Ensure DOM update before scrolling
+                    if (messagesListRef.current) {
+                        messagesListRef.current.scrollTop = (messagesListRef.current.scrollHeight - oldScrollHeight) + oldScrollTop;
+                    }
+                });
+            } else if (!loadOlder && sortedMessages.length > 0) {
+                const lastVisibleMessage = sortedMessages[sortedMessages.length - 1];
+                socketService.markMessagesAsRead({chatId, lastSeenMessageId: lastVisibleMessage.id});
+                if (onMessagesMarkedAsRead) {
+                    onMessagesMarkedAsRead(chatId);
                 }
-
-            } else {
-                setMessages(sortedMessages);
-                // پس از بارگذاری اولیه موفق، پیام‌ها را به عنوان خوانده شده علامت بزن
-                if (sortedMessages.length > 0) {
-                    const lastMessageId = sortedMessages[sortedMessages.length - 1].id;
-                    socketService.markMessagesAsRead({chatId, lastSeenMessageId: lastMessageId});
-                    if (onMessagesMarkedAsRead) {
-                        onMessagesMarkedAsRead(chatId);
-                    }
-                } else { // اگر پیامی نبود هم unreadCount باید صفر شود
-                    socketService.markMessagesAsRead({chatId});
-                    if (onMessagesMarkedAsRead) {
-                        onMessagesMarkedAsRead(chatId);
-                    }
+            } else if (!loadOlder && sortedMessages.length === 0) {
+                socketService.markMessagesAsRead({chatId});
+                if (onMessagesMarkedAsRead) {
+                    onMessagesMarkedAsRead(chatId);
                 }
             }
 
             setHasMoreMessages(fetchedMessages.length === MESSAGES_PER_PAGE);
-            setCurrentPage(page);
+            if (fetchedMessages.length > 0 || page === 1) {
+                setCurrentPage(page); // Update current page only if messages were fetched or it's the first page
+            }
 
         } catch (error) {
             console.error("Failed to load messages:", error);
         } finally {
-            if (loadOlder) {
-                setIsLoadingOlderMessages(false);
-            } else {
-                setIsLoadingMessages(false);
-                setInitialLoadComplete(true); // بارگذاری اولیه تمام شد
-            }
+            if (loadOlder) setIsLoadingOlderMessages(false);
+            else setIsLoadingInitialMessages(false);
         }
     }, [token, onMessagesMarkedAsRead]);
 
-
     useEffect(() => {
         if (selectedChat?.id) {
-            loadMessages(selectedChat.id, 1, false); // بارگذاری اولیه صفحه اول
+            loadMessages(selectedChat.id, 1, false); // Load page 1 when chat changes
         } else {
             setMessages([]);
-            setHasMoreMessages(true);
-            setCurrentPage(1);
-            setInitialLoadComplete(false);
+            setHasMoreMessages(true); // Reset for placeholder
+            setCurrentPage(1); // Reset for placeholder
+            setIsLoadingInitialMessages(false); // Ensure loading state is false
         }
-    }, [selectedChat, loadMessages]);
+    }, [selectedChat?.id, loadMessages]);
 
 
     useEffect(() => {
-        // اسکرول به پایین فقط در بارگذاری اولیه یا دریافت پیام جدید، نه هنگام بارگذاری پیام های قدیمی
-        if (initialLoadComplete && messages.length > 0 && !isLoadingOlderMessages) {
-            // بررسی اینکه آیا آخرین پیام، پیام خودمان است یا پیام جدیدی دریافت شده
-            // این شرط برای جلوگیری از اسکرول ناخواسته هنگام بارگذاری پیام های قدیمی مفید است
-            // اما ممکن است نیاز به تنظیم دقیق تری داشته باشد
+        if (!isLoadingInitialMessages && !isLoadingOlderMessages && messages.length > 0) {
             const lastMessage = messages[messages.length - 1];
-            if (lastMessage?.senderId === currentUser?.id && lastMessage?.tempId) {
-                // اگر پیام موقت از خودمان است، اسکرول کن
-                scrollToBottom("auto"); // اسکرول فوری برای پیام خودمان
-            } else if (messagesListRef.current &&
-                messagesListRef.current.scrollHeight - messagesListRef.current.scrollTop <= messagesListRef.current.clientHeight + 200) {
-                // اگر کاربر نزدیک به پایین اسکرول است، به پایین اسکرول کن
-                scrollToBottom();
+            // Scroll to bottom if the last message is a temporary one (optimistic update)
+            // OR if the user was already near the bottom.
+            if ((lastMessage?.senderId === currentUser?.id && lastMessage?.tempId) || isNearBottom) {
+                setTimeout(() => scrollToBottom(lastMessage?.tempId ? "auto" : "smooth"), 0);
             }
-        } else if (messages.length > 0 && !initialLoadComplete) {
-            // برای بارگذاری اولیه، پس از چند لحظه اسکرول کن تا DOM آپدیت شود
-            setTimeout(() => scrollToBottom("auto"), 100);
         }
-    }, [messages, initialLoadComplete, isLoadingOlderMessages, currentUser, scrollToBottom]);
-
+    }, [messages, isLoadingInitialMessages, isLoadingOlderMessages, currentUser?.id, scrollToBottom, isNearBottom]);
 
     const handleNewMessage = useCallback((newMessage) => {
         if (selectedChat?.id && newMessage.chatId === selectedChat.id) {
             setMessages(prevMessages => {
                 const existingTempMessageIndex = newMessage.tempId ? prevMessages.findIndex(msg => msg.tempId === newMessage.tempId) : -1;
-                const existingRealMessage = prevMessages.find(msg => msg.id === newMessage.id);
+                const existingRealMessage = prevMessages.find(msg => msg.id === newMessage.id && !msg.tempId);
 
                 if (existingTempMessageIndex !== -1) {
                     const updatedMessages = [...prevMessages];
                     updatedMessages[existingTempMessageIndex] = {
                         ...newMessage,
                         tempId: undefined,
-                        deliveryStatus: 'sent'
-                    }; // وضعیت به sent تغییر کند
+                    };
+                    if (updatedMessages[existingTempMessageIndex].senderId === currentUser?.id && !updatedMessages[existingTempMessageIndex].deliveryStatus) {
+                        updatedMessages[existingTempMessageIndex].deliveryStatus = 'sent';
+                    }
                     return updatedMessages;
                 } else if (!existingRealMessage) {
-                    return [...prevMessages, {...newMessage, deliveryStatus: 'received'}]; // پیام دریافتی
+                    const messageToAdd = { ...newMessage };
+                    if (messageToAdd.senderId === currentUser?.id && !messageToAdd.deliveryStatus) {
+                        messageToAdd.deliveryStatus = 'sent';
+                    }
+                    return [...prevMessages, messageToAdd];
                 }
                 return prevMessages;
             });
 
             if (newMessage.senderId !== currentUser?.id) {
                 socketService.markMessagesAsRead({chatId: selectedChat.id, lastSeenMessageId: newMessage.id});
+                if (onMessagesMarkedAsRead) {
+                    onMessagesMarkedAsRead(selectedChat.id);
+                }
             }
         }
-    }, [selectedChat, currentUser]); // currentUser از props
+    }, [selectedChat?.id, currentUser?.id, onMessagesMarkedAsRead]);
 
 
-    const handleTypingEvent = useCallback((typingData) => { /* ... (مانند قبل) ... */
+    const handleTypingEvent = useCallback((typingData) => {
         if (selectedChat?.id && typingData.chatId === selectedChat.id && typingData.userId !== currentUser?.id) {
             setTypingUsers(prev => ({...prev, [typingData.userId]: typingData.isTyping}));
+            if (typingData.isTyping) {
+                setTimeout(() => {
+                    setTypingUsers(currentTypingUsers => {
+                        if (currentTypingUsers[typingData.userId]) {
+                            return {...currentTypingUsers, [typingData.userId]: false };
+                        }
+                        return currentTypingUsers;
+                    });
+                }, 3000);
+            }
         }
-    }, [selectedChat, currentUser]);
+    }, [selectedChat?.id, currentUser?.id]);
 
 
     const handleMessageStatusUpdate = useCallback((statusUpdate) => {
-        // statusUpdate: { messageId, chatId, status: 'delivered' | 'read', recipientId }
         if (selectedChat?.id && statusUpdate.chatId === selectedChat.id) {
             setMessages(prevMessages => prevMessages.map(msg => {
-                if (msg.id === statusUpdate.messageId && msg.senderId === currentUser?.id) {
-                    // فقط پیام های ارسالی خودمان را آپدیت می کنیم
-                    let newDeliveryStatus = msg.deliveryStatus;
+                if (msg.senderId === currentUser?.id && msg.id === statusUpdate.messageId) {
+                    const statusHierarchy = { sending: 0, sent: 1, delivered: 2, read: 3 };
+                    const currentStatusValue = statusHierarchy[msg.deliveryStatus] || 0;
+                    const newStatusValue = statusHierarchy[statusUpdate.status] || 0;
 
-                    // اولویت وضعیت ها: read > delivered > sent > sending
-                    if (statusUpdate.status === 'read') {
-                        newDeliveryStatus = 'read';
-                    } else if (statusUpdate.status === 'delivered' && newDeliveryStatus !== 'read') {
-                        newDeliveryStatus = 'delivered';
-                    }
-                    return { ...msg, deliveryStatus: newDeliveryStatus, readByRecipient: newDeliveryStatus === 'read' };
-                }
-                return msg;
-            }));
-        }
-    }, [selectedChat, currentUser]);
-
-
-    const handleMessagesReadByOther = useCallback((readData) => {
-        // readData: { chatId, readerId, lastReadMessageId (یا messageId اگر برای هر پیام است) }
-        if (selectedChat?.id && readData.chatId === selectedChat.id && readData.readerId !== currentUser?.id) {
-            setMessages(prevMessages => prevMessages.map(msg => {
-                if (msg.senderId === currentUser?.id) { // فقط پیام های ارسالی خودمان
-                    if (msg.id === readData.messageId || (readData.lastReadMessageId && msg.id <= readData.lastReadMessageId /* این مقایسه UUID ممکن است دقیق نباشد */)) {
-                        return { ...msg, deliveryStatus: 'read', readByRecipient: true };
+                    if (newStatusValue >= currentStatusValue) {
+                        return {...msg, deliveryStatus: statusUpdate.status};
                     }
                 }
                 return msg;
             }));
         }
-    }, [selectedChat, currentUser]);
+    }, [selectedChat?.id, currentUser?.id]);
 
     useEffect(() => {
-        if (selectedChat?.id) { // فقط اگر چتی انتخاب شده listener ها را ثبت کن
+        if (selectedChat?.id) {
             socketService.onNewMessage(handleNewMessage);
             socketService.onTyping(handleTypingEvent);
             socketService.onMessageStatusUpdate(handleMessageStatusUpdate);
-            socketService.onMessagesReadByRecipient(handleMessagesReadByOther);
 
             return () => {
                 socketService.offNewMessage(handleNewMessage);
                 socketService.offTyping(handleTypingEvent);
                 socketService.offMessageStatusUpdate(handleMessageStatusUpdate);
-                socketService.offMessagesReadByRecipient(handleMessagesReadByOther);
+                setTypingUsers({});
             };
         }
-    }, [selectedChat, handleNewMessage, handleTypingEvent, handleMessageStatusUpdate, handleMessagesReadByOther]);
-    // selectedChat به وابستگی اضافه شد تا listener ها برای چت جدید دوباره ثبت شوند
+    }, [selectedChat?.id, handleNewMessage, handleTypingEvent, handleMessageStatusUpdate]);
 
 
     const handleSendMessage = (content) => {
         if (!selectedChat?.id || !content.trim() || !currentUser?.id) return;
-        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
         const messageData = {
             chatId: selectedChat.id,
             content: content.trim(),
@@ -224,8 +229,10 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
         };
 
         const tempMessageObject = {
-            ...messageData, // شامل tempId, chatId, content, contentType
             id: tempId,
+            chatId: selectedChat.id,
+            content: content.trim(),
+            contentType: 'text',
             senderId: currentUser.id,
             sender: {
                 id: currentUser.id,
@@ -235,20 +242,21 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
             },
             createdAt: new Date().toISOString(),
             deliveryStatus: 'sending',
+            tempId: tempId,
         };
         setMessages(prevMessages => [...prevMessages, tempMessageObject]);
         socketService.sendMessage(messageData);
     };
 
     const getChatDisplayInfo = useCallback(() => {
-        if (!selectedChat) return {name: '', recipientId: null, avatarInitial: '?', isGroup: false, members: []};
+        if (!selectedChat) return {name: '', recipientId: null, avatarInitial: '', isGroup: false, members: [], profileImageUrl: null};
 
         if (selectedChat.type === 'private' && selectedChat.members) {
             const otherMember = selectedChat.members.find(m => m.id !== currentUser?.id);
             return {
                 name: otherMember?.displayName || otherMember?.username || 'User',
                 recipientId: otherMember?.id,
-                avatarInitial: (otherMember?.displayName || otherMember?.username || 'U').substring(0, 1).toUpperCase(),
+                avatarInitial: (otherMember?.displayName || otherMember?.username || 'U').charAt(0).toUpperCase(),
                 profileImageUrl: otherMember?.profileImageUrl,
                 isGroup: false,
                 members: selectedChat.members
@@ -257,14 +265,14 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
             return {
                 name: selectedChat.name || 'Group Chat',
                 recipientId: null,
-                avatarInitial: null, // از آیکون گروه استفاده می کنیم
-                profileImageUrl: selectedChat.groupImageUrl, // اگر تصویر گروه دارید
+                avatarInitial: null,
+                profileImageUrl: selectedChat.groupImageUrl,
                 isGroup: true,
                 members: selectedChat.members || [],
                 creatorId: selectedChat.creatorId
             };
         }
-        return {name: 'Chat', recipientId: null, avatarInitial: '?', isGroup: false, members: []};
+        return {name: 'Chat', recipientId: null, avatarInitial: '?', isGroup: false, members: [], profileImageUrl: null};
     }, [selectedChat, currentUser]);
 
     const displayInfo = getChatDisplayInfo();
@@ -273,106 +281,96 @@ function ChatWindow({selectedChat, currentUser, userStatuses, onMessagesMarkedAs
     if (displayInfo.isGroup) {
         const onlineMembersCount = displayInfo.members.filter(m => userStatuses[m.id]?.status === 'online').length;
         statusOrMembersText = `${displayInfo.members.length} member${displayInfo.members.length !== 1 ? 's' : ''}`;
-        if (displayInfo.members.length > 0) { // فقط اگر عضوی هست، تعداد آنلاین را نمایش بده
+        if (onlineMembersCount > 0) {
             statusOrMembersText += `, ${onlineMembersCount} online`;
         }
     } else if (displayInfo.recipientId) {
         const recipientStatusInfo = userStatuses[displayInfo.recipientId];
-        if (recipientStatusInfo) {
-            statusOrMembersText = recipientStatusInfo.status; // متغیر statusText را باید تعریف کنید
-            if (recipientStatusInfo.status === 'online') {
-                statusOrMembersText = 'online';
-            } else if (recipientStatusInfo.status === 'offline' && recipientStatusInfo.lastSeenAt) {
-                const lastSeenDate = new Date(recipientStatusInfo.lastSeenAt);
-                statusOrMembersText = `last seen ${lastSeenDate.toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                })}`;
-                if (lastSeenDate.toLocaleDateString() !== new Date().toLocaleDateString()) {
-                    statusOrMembersText += ` on ${lastSeenDate.toLocaleDateString()}`;
-                }
+        if (recipientStatusInfo?.status === 'online') {
+            statusOrMembersText = 'online';
+        } else if (recipientStatusInfo?.lastSeenAt) {
+            const lastSeenDate = new Date(recipientStatusInfo.lastSeenAt);
+            const now = new Date();
+            if (lastSeenDate.toDateString() === now.toDateString()) {
+                statusOrMembersText = `last seen today at ${lastSeenDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
             } else {
-                statusOrMembersText = 'offline'; // اگر lastSeenAt ندارد
+                statusOrMembersText = `last seen ${lastSeenDate.toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
             }
         } else {
-            statusOrMembersText = 'offline'; // اگر اطلاعات وضعیت موجود نیست
+            statusOrMembersText = 'offline';
         }
     }
 
     const typingUserNames = Object.entries(typingUsers)
-        .filter(([, isTyping]) => isTyping) // فقط آنهایی که isTyping true است
+        .filter(([, isTyping]) => isTyping)
         .map(([userId]) => {
             const chatMember = selectedChat?.members?.find(m => m.id === userId);
             return chatMember?.displayName || chatMember?.username || 'Someone';
         })
+        .slice(0, 2)
         .join(', ');
 
-    const handleLoadMoreMessages = () => {
-        if (selectedChat?.id && hasMoreMessages && !isLoadingOlderMessages) {
-            loadMessages(selectedChat.id, currentPage + 1, true);
-        }
-    };
+    const additionalTypingCount = Object.values(typingUsers).filter(isTyping => isTyping).length - 2;
+
+
     if (!selectedChat) {
         return (
-            <div className="chat-window-placeholder">
+            <div className="chat-window-placeholder" aria-label="Select a chat">
+                <MessageSquareIcon />
                 <p>Select a chat to start messaging</p>
+                <p>Or search for users to begin a new conversation.</p>
             </div>
         );
     }
 
     return (
-        <main className="chat-window-container">
+        <main className="chat-window-container" role="log" aria-live="polite">
             <header className="chat-window-header">
                 <div
                     className="chat-header-avatar"
-                    style={{
-                        backgroundColor: displayInfo.isGroup ? '#00796b' : (displayInfo.profileImageUrl ? 'transparent' : '#bdbdbd')
-                    }}
+                    style={{backgroundColor: displayInfo.isGroup ? '#00796b' : (displayInfo.profileImageUrl ? 'transparent' : '#bdbdbd')}}
+                    aria-hidden="true"
                 >
                     {displayInfo.isGroup ?
-                        (displayInfo.profileImageUrl ? <img src={displayInfo.profileImageUrl} alt="G"/> :
-                            <GroupAvatarIcon/>) :
-                        (displayInfo.profileImageUrl ? <img src={displayInfo.profileImageUrl}
-                                                            alt={displayInfo.name?.substring(0, 1)}/> : displayInfo.avatarInitial)
+                        (displayInfo.profileImageUrl ? <img src={displayInfo.profileImageUrl} alt={`${displayInfo.name} group icon`} /> : <UsersIcon />) :
+                        (displayInfo.profileImageUrl ? <img src={displayInfo.profileImageUrl} alt={`${displayInfo.name} profile`} /> : displayInfo.avatarInitial)
                     }
                     {!displayInfo.isGroup && displayInfo.recipientId && userStatuses[displayInfo.recipientId]?.status === 'online' && (
-                        <span className="header-status-dot online"></span>
+                        <span className="header-status-dot online" title="Online"></span>
                     )}
                 </div>
                 <div className="chat-header-info">
-                    <h3>{displayInfo.name}</h3>
+                    <h3 aria-label={`Chat with ${displayInfo.name}`}>{displayInfo.name}</h3>
                     {statusOrMembersText && (
-                        <span
-                            className={`chat-status-text ${displayInfo.isGroup ? 'group-info' : (userStatuses[displayInfo.recipientId]?.status || 'offline')}`}>
-              {statusOrMembersText}
-            </span>
+                        <span className={`chat-status-text ${displayInfo.isGroup ? 'group-info' : (userStatuses[displayInfo.recipientId]?.status || 'offline')}`}>
+                            {statusOrMembersText}
+                        </span>
                     )}
                 </div>
-                {/*{displayInfo.isGroup && (*/}
-                {/*    <button onClick={handleGroupInfoClick} className="chat-header-action-button" title="Group Info">*/}
-                {/*        <InfoIcon/>*/}
-                {/*    </button>*/}
-                {/*)}*/}
             </header>
 
             <MessageList
                 messages={messages}
                 currentUser={currentUser}
-                isLoadingInitial={isLoadingMessages && messages.length === 0} // فقط برای بارگذاری اولیه
+                isLoadingInitial={isLoadingInitialMessages}
                 isLoadingOlder={isLoadingOlderMessages}
                 hasMoreMessages={hasMoreMessages}
-                onLoadMore={handleLoadMoreMessages}
-                messagesListRef={messagesListRef} // Ref برای div لیست پیام ها
+                onLoadMore={() => loadMessages(selectedChat.id, currentPage + 1, true)}
+                messagesListRef={messagesListRef}
                 messagesEndRef={messagesEndRef}
             />
 
-            {typingUserNames && <div className="typing-indicator">{typingUserNames} is typing...</div>}
+            {(typingUserNames || additionalTypingCount > 0) && (
+                <div className="typing-indicator" aria-live="polite">
+                    {typingUserNames}
+                    {additionalTypingCount > 0 && ` and ${additionalTypingCount} more`}
+                    {Object.values(typingUsers).filter(isTyping => isTyping).length > 1 ? ' are typing...' : ' is typing...'}
+                </div>
+            )}
 
             <MessageInput onSendMessage={handleSendMessage} chatId={selectedChat.id}/>
         </main>
     );
 }
-
-
 
 export default ChatWindow;

@@ -28,13 +28,15 @@ const chatServiceAPI = {
         }
     },
 
-    getChatMessages: async (chatId, token, limit = 20, offset = 0) => {
+    getChatMessages: async (chatId, token, limit = 30, offset = 0) => { // Increased default limit
         try {
             const response = await axios.get(`${API_BASE_URL}/chats/${chatId}/messages`, {
                 headers: { Authorization: `Bearer ${token}` },
-                params: { limit, offset },
+                params: { limit, offset, order: 'ASC' }, // Request ascending order
             });
-            return response.data; // آرایه‌ای از پیام‌ها
+            // Backend already reverses DESC order, so client receives ASC (oldest first).
+            // No client-side reversal needed if API adheres to this.
+            return response.data;
         } catch (error) {
             console.error('API Error fetching messages:', error.response?.data || error.message);
             throw error.response?.data || new Error('Failed to fetch messages');

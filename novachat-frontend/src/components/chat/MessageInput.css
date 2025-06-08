@@ -2,63 +2,80 @@
 .message-input-form {
     display: flex;
     align-items: center;
-    padding: 10px 15px;
-    background-color: #f0f2f5; /* رنگ پس‌زمینه فرم ورود پیام */
-    border-top: 1px solid #e0e0e0;
-    min-height: 62px;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background-color: var(--chat-input-bg);
+    border-top: 1px solid var(--border-color);
+    min-height: 62px; /* Consistent height */
     box-sizing: border-box;
+    flex-shrink: 0; /* Prevent shrinking */
 }
 
 .message-text-input {
     flex-grow: 1;
     padding: 10px 15px;
-    border: 1px solid #d1d7db;
-    border-radius: 20px;
+    border: 1px solid #d1d7db; /* Keeping a distinct border color for input */
+    border-radius: var(--border-radius-pill); /* Pill shape */
     font-size: 0.95em;
-    margin: 0 10px; /* فاصله از دکمه‌ها */
-    background-color: #fff;
-    max-height: 100px; /* برای جلوگیری از بلند شدن بیش از حد در صورت متن چند خطی (اگر textarea استفاده شود) */
-    resize: none; /* اگر textarea بود */
+    margin: 0 var(--spacing-sm);
+    background-color: var(--surface-color);
+    color: var(--on-surface-color);
+    max-height: 120px; /* Allow a bit more height for multi-line */
+    resize: none; /* Disable textarea resize handle */
+    line-height: 1.4; /* Better for multi-line */
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+.message-text-input::placeholder {
+    color: #8696a0; /* Softer placeholder text */
 }
 .message-text-input:focus {
     outline: none;
-    border-color: #007bff;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(var(--primary-color-rgb, 0,123,255),.25);
 }
 
 .send-message-button {
-    background-color: #00a884; /* رنگ سبز واتس‌اپ */
+    background-color: var(--primary-color); /* Using primary theme color */
     color: white;
     border: none;
-    border-radius: 50%; /* دایره‌ای */
-    width: 40px;
-    height: 40px;
+    border-radius: 50%;
+    width: 44px; /* Slightly larger for better touch */
+    height: 44px;
     display: flex;
     justify-content: center;
     align-items: center;
     cursor: pointer;
     transition: background-color 0.2s ease;
+    flex-shrink: 0; /* Prevent shrinking */
 }
 
 .send-message-button:hover {
-    background-color: #008769;
+    background-color: var(--primary-color-dark);
 }
 .send-message-button:disabled {
-    background-color: #96c3bb; /* یا یک رنگ خاکستری */
+    background-color: var(--secondary-color);
+    opacity: 0.5;
     cursor: not-allowed;
 }
 .send-message-button svg {
-    fill: white; /* رنگ آیکون */
+    fill: white;
+    width: 24px; /* Ensure icon size is consistent */
+    height: 24px;
 }
 
-/* دکمه پیوست فایل (اختیاری برای آینده) */
 .attachment-button {
     background: none;
     border: none;
-    padding: 8px;
+    padding: var(--spacing-sm);
     cursor: pointer;
-    font-size: 1.5em; /* اندازه آیکون */
-    color: #54656f;
+    font-size: 1.5em;
+    color: var(--on-surface-secondary-color);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
 }
 .attachment-button:hover {
-    color: #007bff;
+    background-color: rgba(0,0,0,0.05);
+    color: var(--primary-color);
 }

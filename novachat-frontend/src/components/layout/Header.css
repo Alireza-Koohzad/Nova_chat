@@ -3,33 +3,43 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 20px;
-    background-color: #007bff; /* رنگ هدر */
+    padding: 0 var(--spacing-lg); /* Vertical padding handled by height */
+    background-color: var(--primary-color);
     color: white;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    height: 60px; /* ارتفاع ثابت برای هدر */
-    flex-shrink: 0; /* جلوگیری از کوچک شدن هدر */
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+    height: var(--header-height);
+    flex-shrink: 0;
+    position: relative; /* For potential z-index stacking if needed */
+    z-index: 1000; /* Ensure header is above other content */
 }
 
 .header-logo {
-    font-size: 1.5em;
-    font-weight: bold;
+    font-size: 1.6em;
+    font-weight: 700;
+    letter-spacing: -0.5px;
 }
 
-.header-user-info span {
-    margin-right: 15px;
+.header-user-info {
+    display: flex;
+    align-items: center;
 }
 
-.logout-button {
-    padding: 8px 15px;
-    background-color: #dc3545; /* رنگ دکمه خروج */
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
+.header-user-info .user-display-name { /* Changed from generic span */
+    margin-right: var(--spacing-md);
     font-weight: 500;
 }
 
+.logout-button {
+    padding: var(--spacing-sm) var(--spacing-md);
+    background-color: var(--danger-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    font-size: 0.9em;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+}
+
 .logout-button:hover {
-    background-color: #c82333;
+    background-color: #c82333; /* Darker red */
 }

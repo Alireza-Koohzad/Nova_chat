@@ -6,22 +6,34 @@ const Message = require('../models/Message');
 const ChatMember = require('../models/ChatMember');
 const {sequelize} = require('../config/database'); // برای تراکنش‌ها
 const { validationResult } = require('express-validator');
-const { io } = require('../server');
+const { io } = require('../server'); // Assuming io is exported from server.js
 
 
 // Helper function to format chat response
 const formatChatResponse = async (chat, currentUserId) => {
-    if (!chat) return null; // اگر چت null بود
-    const chatJSON = chat.toJSON ? chat.toJSON() : { ...chat }; // اگر از plain object استفاده شده
+    if (!chat) return null;
+    const chatJSON = chat.toJSON ? chat.toJSON() : { ...chat };
 
-    // اعضا (شامل نقش اگر موجود است)
+    if (!chatJSON.members || chatJSON.members.some(m => !m.username)) {
+        const fullChat = await Chat.findByPk(chatJSON.id, {
+            include: [{
+                model: User,
+                as: 'members',
+                attributes: ['id', 'username', 'displayName', 'profileImageUrl'],
+                through: { model: ChatMember, attributes: ['role'] }
+            }]
+        });
+        if (fullChat) {
+            chatJSON.members = fullChat.members.map(member => member.toJSON());
+        }
+    }
+
     if (chatJSON.members && chatJSON.members.length > 0) {
         chatJSON.members = chatJSON.members.map(member => ({
             id: member.id,
             username: member.username,
             displayName: member.displayName,
             profileImageUrl: member.profileImageUrl,
-            // ChatMember شامل اطلاعات نقش است که از through در include می آید
             role: member.ChatMember?.role || (member.id === chatJSON.creatorId ? 'admin' : 'member')
         }));
     }
@@ -29,59 +41,29 @@ const formatChatResponse = async (chat, currentUserId) => {
     if (chatJSON.type === 'private') {
         const otherMemberUser = chatJSON.members?.find(m => m.id !== currentUserId);
         if (otherMemberUser) {
-            chatJSON.name = otherMemberUser.displayName || otherMemberUser.username; // نام چت خصوصی، نام کاربر دیگر
-            chatJSON.profileImageUrl = otherMemberUser.profileImageUrl; // تصویر کاربر دیگر
+            chatJSON.name = otherMemberUser.displayName || otherMemberUser.username;
+            chatJSON.profileImageUrl = otherMemberUser.profileImageUrl;
             chatJSON.recipientId = otherMemberUser.id;
-        } else if (!chatJSON.name) {
-            chatJSON.name = "Private Chat"; // اگر به دلایلی کاربر دیگر پیدا نشد
+        } else {
+            chatJSON.name = chatJSON.name || "Private Chat";
         }
-    } else if (chatJSON.type === 'group') {
-        // نام گروه از خود فیلد chat.name می آید
-        // chatJSON.groupImageUrl = chat.groupImageUrl; // اگر تصویر گروه دارید
     }
 
-    // اضافه کردن آخرین پیام (اگر وجود دارد)
-    if (chat.lastMessage) { // اگر lastMessage به صورت eager load شده باشد
-        chatJSON.lastMessage = chat.lastMessage.toJSON ? chat.lastMessage.toJSON() : { ...chat.lastMessage };
-        if (chat.lastMessage.sender) { // اگر فرستنده هم eager load شده
-            chatJSON.lastMessage.sender = chat.lastMessage.sender.toJSON ? chat.lastMessage.sender.toJSON() : { ...chat.lastMessage.sender };
+    if (chat.lastMessage && typeof chat.lastMessage.toJSON === 'function') {
+        chatJSON.lastMessage = chat.lastMessage.toJSON();
+        if (chat.lastMessage.sender && typeof chat.lastMessage.sender.toJSON === 'function') {
+            chatJSON.lastMessage.sender = chat.lastMessage.sender.toJSON();
         }
     } else if (chat.lastMessageId && !chatJSON.lastMessage) {
-        // اگر فقط ID آخرین پیام را داریم و خود پیام لود نشده، آن را fetch کن (اختیاری)
         const lastMsg = await Message.findByPk(chat.lastMessageId, {
-            include: [{ model: User, as: 'sender', attributes: ['id', 'username', 'displayName']}]
+            attributes: ['id', 'chatId', 'senderId', 'content', 'contentType', 'fileUrl', 'deliveryStatus', 'createdAt', 'updatedAt'],
+            include: [{ model: User, as: 'sender', attributes: ['id', 'username', 'displayName', 'profileImageUrl']}]
         });
         if (lastMsg) {
             chatJSON.lastMessage = lastMsg.toJSON();
         }
     }
-
-    // محاسبه تعداد پیام‌های خوانده نشده برای currentUserId
-    // این بخش را می‌توان دقیق‌تر کرد
-    if (chatJSON.id && currentUserId) {
-        const currentUserMembership = await ChatMember.findOne({
-            where: { chatId: chatJSON.id, userId: currentUserId },
-            attributes: ['lastReadMessageId']
-        });
-        if (currentUserMembership && chatJSON.lastMessage?.id && currentUserMembership.lastReadMessageId !== chatJSON.lastMessage.id) {
-            // شمارش پیام های جدیدتر از lastReadMessageId
-            const unreadCount = await Message.count({
-                where: {
-                    chatId: chatJSON.id,
-                    id: { [Op.ne]: chatJSON.lastMessage.id }, // به جز خود آخرین پیام (اگر این منطق را می خواهید)
-                    createdAt: {
-                        [Op.gt]: (await Message.findByPk(currentUserMembership.lastReadMessageId || '00000000-0000-0000-0000-000000000000', {attributes: ['createdAt']}))?.createdAt || new Date(0)
-                    }
-                }
-            });
-            chatJSON.unreadCount = unreadCount;
-        } else {
-            chatJSON.unreadCount = 0;
-        }
-    } else {
-        chatJSON.unreadCount = 0;
-    }
-
+    chatJSON.unreadCount = chatJSON.unreadCount || 0;
     return chatJSON;
 };
 
@@ -92,7 +74,6 @@ const formatChatResponse = async (chat, currentUserId) => {
 exports.getUserChats = async (req, res) => {
     try {
         const userId = req.user.id;
-        // ابتدا ID چت‌هایی که کاربر عضو آنهاست را پیدا کن
         const userChatMemberships = await ChatMember.findAll({
             where: { userId },
             attributes: ['chatId']
@@ -100,45 +81,39 @@ exports.getUserChats = async (req, res) => {
         const chatIds = userChatMemberships.map(cm => cm.chatId);
 
         if (chatIds.length === 0) {
-            return res.json([]); // اگر کاربر عضوی از هیچ چتی نیست
+            return res.json([]);
         }
 
         const chats = await Chat.findAll({
-            where: { id: { [Op.in]: chatIds } }, // فقط چت‌های مربوط به کاربر
+            where: { id: { [Op.in]: chatIds } },
             include: [
                 {
                     model: User,
-                    as: 'members', // اعضای هر چت
+                    as: 'members',
                     attributes: ['id', 'username', 'displayName', 'profileImageUrl'],
-                    through: {
-                        model: ChatMember, // برای دسترسی به فیلدهای جدول واسط
-                        attributes: ['role'] // فقط نقش را از جدول واسط می‌خواهیم
-                    }
+                    through: { model: ChatMember, attributes: ['role'] }
                 },
                 {
                     model: Message,
-                    as: 'lastMessage', // آخرین پیام چت
-                    include: [{ model: User, as: 'sender', attributes: ['id', 'username', 'displayName']}]
+                    as: 'lastMessage',
+                    attributes: ['id', 'chatId', 'senderId', 'content', 'contentType', 'fileUrl', 'deliveryStatus', 'createdAt', 'updatedAt'],
+                    include: [{ model: User, as: 'sender', attributes: ['id', 'username', 'displayName', 'profileImageUrl']}]
                 },
                 {
-                    model: User, // ایجاد کننده گروه
+                    model: User,
                     as: 'creator',
                     attributes: ['id', 'username', 'displayName']
                 }
             ],
-            order: [
-                ['updatedAt', 'DESC'] // ساده ترین راه اگر updatedAt چت با هر پیام آپدیت شود
-            ],
+            order: [['updatedAt', 'DESC']],
         });
 
-        const formattedChats = await Promise.all(
-            chats.map(chat => formatChatResponse(chat, userId))
-        );
+        const formattedChatsPromises = chats.map(chat => formatChatResponse(chat, userId));
+        let formattedChats = await Promise.all(formattedChatsPromises);
 
-        // مرتب سازی نهایی در سمت سرور پس از فرمت کردن (اگر لازم است)
         formattedChats.sort((a, b) => {
-            const dateA = new Date(a.lastMessage?.createdAt || a.updatedAt);
-            const dateB = new Date(b.lastMessage?.createdAt || b.updatedAt);
+            const dateA = new Date(a.lastMessage?.createdAt || a.updatedAt || 0);
+            const dateB = new Date(b.lastMessage?.createdAt || b.updatedAt || 0);
             return dateB - dateA;
         });
 
@@ -155,103 +130,96 @@ exports.getUserChats = async (req, res) => {
 // @access  Private
 exports.createOrGetPrivateChat = async (req, res) => {
     const senderId = req.user.id;
-    const {recipientId} = req.params;
+    const { recipientId } = req.params;
 
     if (senderId === recipientId) {
-        return res.status(400).json({success: false, message: "Cannot create a chat with yourself."});
+        return res.status(400).json({ success: false, message: "Cannot create a chat with yourself." });
     }
 
     try {
         const recipient = await User.findByPk(recipientId);
         if (!recipient) {
-            return res.status(404).json({success: false, message: 'Recipient user not found.'});
+            return res.status(404).json({ success: false, message: 'Recipient user not found.' });
         }
 
-        // پیدا کردن چت خصوصی موجود بین دو کاربر
-        // این کوئری پیچیده است چون باید مطمئن شویم دقیقا همین دو نفر عضو هستند و نه بیشتر یا کمتر
-        const existingChat = await Chat.findOne({
-            where: {
-                type: 'private',
-            },
-            include: [{
-                model: ChatMember,
-                as: 'ChatMembersData', // این as باید با چیزی که در Chat.belongsToMany(User, { through: ChatMember ... }) تعریف شده متفاوت باشد یا مستقیم از ChatMember استفاده کنیم
-                                   // برای سادگی، مستقیما از ChatMember استفاده می‌کنیم
-                required: true,
-                attributes: [] // ما فقط به وجود رکوردها نیاز داریم
-            }],
-
-        });
-
-        // راه حل ساده تر (ولی ممکن است برای دیتابیس های خیلی بزرگ بهینه نباشد):
-        const userChats = await Chat.findAll({
-            where: {type: 'private'},
-            include: [
-                {
-                    model: User,
-                    as: 'members',
-                    attributes: ['id'],
-                    through: {attributes: []}
-                }
-            ]
-        });
+        const senderMemberRecords = await ChatMember.findAll({ where: { userId: senderId } });
+        const senderChatIds = senderMemberRecords.map(cm => cm.chatId);
 
         let foundChat = null;
-        for (const chat of userChats) {
-            const memberIds = chat.members.map(m => m.id);
-            if (memberIds.length === 2 && memberIds.includes(senderId) && memberIds.includes(recipientId)) {
-                foundChat = chat;
-                break;
+        if (senderChatIds.length > 0) {
+            const potentialChats = await Chat.findAll({
+                where: {
+                    id: { [Op.in]: senderChatIds },
+                    type: 'private'
+                },
+                include: [{
+                    model: User,
+                    as: 'members',
+                    attributes: ['id']
+                }]
+            });
+
+            for (const chat of potentialChats) {
+                if (chat.members.length === 2) {
+                    const memberIds = chat.members.map(m => m.id);
+                    if (memberIds.includes(senderId) && memberIds.includes(recipientId)) {
+                        foundChat = chat;
+                        break;
+                    }
+                }
             }
         }
 
-
         if (foundChat) {
-            // اگر چت موجود بود، اطلاعات کامل آن را برگردان
             const detailedChat = await Chat.findByPk(foundChat.id, {
                 include: [
-                    {model: User, as: 'members', attributes: ['id', 'username', 'displayName', 'profileImageUrl']},
+                    { model: User, as: 'members', attributes: ['id', 'username', 'displayName', 'profileImageUrl'], through: {attributes: ['role']} },
                     {
                         model: Message,
                         as: 'lastMessage',
-                        include: [{model: User, as: 'sender', attributes: ['id', 'username', 'displayName']}]
+                        attributes: ['id', 'chatId', 'senderId', 'content', 'contentType', 'fileUrl', 'deliveryStatus', 'createdAt', 'updatedAt'],
+                        include: [{ model: User, as: 'sender', attributes: ['id', 'username', 'displayName', 'profileImageUrl'] }]
                     }
                 ]
             });
             return res.json(await formatChatResponse(detailedChat, senderId));
         }
 
-        // اگر چت موجود نبود، یکی جدید ایجاد کن (در یک تراکنش)
         const t = await sequelize.transaction();
         try {
-            const newChat = await Chat.create({type: 'private'}, {transaction: t});
+            const newChat = await Chat.create({ type: 'private' }, { transaction: t });
             await ChatMember.bulkCreate([
-                {chatId: newChat.id, userId: senderId},
-                {chatId: newChat.id, userId: recipientId},
-            ], {transaction: t});
+                { chatId: newChat.id, userId: senderId, role: 'member' },
+                { chatId: newChat.id, userId: recipientId, role: 'member' },
+            ], { transaction: t });
 
             await t.commit();
 
-            // اطلاعات کامل چت جدید را برگردان
             const detailedNewChat = await Chat.findByPk(newChat.id, {
                 include: [
-                    {model: User, as: 'members', attributes: ['id', 'username', 'displayName', 'profileImageUrl']},
-                    // در ابتدا lastMessage وجود ندارد
+                    { model: User, as: 'members', attributes: ['id', 'username', 'displayName', 'profileImageUrl'], through: {attributes: ['role']} }
                 ]
             });
-            return res.status(201).json(await formatChatResponse(detailedNewChat, senderId));
+            const formattedNewChat = await formatChatResponse(detailedNewChat, senderId);
+            if (io && formattedNewChat) {
+                [senderId, recipientId].forEach(uid => {
+                    io.to(uid).emit('newChat', formattedNewChat);
+                });
+            }
+            return res.status(201).json(formattedNewChat);
 
         } catch (error) {
             await t.rollback();
-            console.error('Error creating private chat:', error);
-            throw error; // باعث می‌شود به catch بیرونی برود
+            console.error('Error creating private chat transaction:', error);
+            throw error;
         }
 
     } catch (error) {
         console.error('Error in createOrGetPrivateChat:', error);
-        res.status(500).json({success: false, message: 'Server error'});
+        res.status(500).json({ success: false, message: 'Server error creating or getting private chat' });
     }
 };
+
 
 // @desc    Get messages for a specific chat
 // @route   GET /api/chats/:chatId/messages
@@ -259,26 +227,15 @@ exports.createOrGetPrivateChat = async (req, res) => {
 exports.getChatMessages = async (req, res) => {
     const { chatId } = req.params;
     const currentUserId = req.user.id;
-    const limit = parseInt(req.query.limit) || 30; // افزایش limit پیش‌فرض
+    const limit = parseInt(req.query.limit) || 30;
     const offset = parseInt(req.query.offset) || 0;
+    const requestedOrder = (req.query.order || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
 
     try {
         const chatMember = await ChatMember.findOne({ where: { chatId, userId: currentUserId } });
         if (!chatMember) {
             return res.status(403).json({ success: false, message: "You are not a member of this chat." });
-        }
-
-        const chat = await Chat.findByPk(chatId, {
-            include: [{ // برای دسترسی به اعضا و نوع چت
-                model: User,
-                as: 'members',
-                attributes: ['id'], // فقط ID لازم است
-                through: { model: ChatMember, attributes: ['userId', 'lastReadMessageId', 'role'] }
-            }]
-        });
-
-        if (!chat) {
-            return res.status(404).json({ success: false, message: "Chat not found." });
         }
 
         const messagesFromDB = await Message.findAll({
@@ -290,79 +247,33 @@ exports.getChatMessages = async (req, res) => {
                     attributes: ['id', 'username', 'displayName', 'profileImageUrl'],
                 },
             ],
-            order: [['createdAt', 'DESC']],
+            attributes: ['id', 'chatId', 'senderId', 'content', 'contentType', 'fileUrl', 'deliveryStatus', 'createdAt', 'updatedAt'],
+            order: [['createdAt', requestedOrder]],
             limit,
             offset,
         });
-
-        // پردازش پیام‌ها برای اضافه کردن وضعیت delivery/read
-        const processedMessages = await Promise.all(messagesFromDB.map(async (msg) => {
-            const message = msg.toJSON(); // تبدیل به آبجکت ساده
-            message.deliveryStatus = 'sent'; // پیش فرض برای پیام های قدیمی که از طریق سوکت وضعیت نگرفته اند
-            message.readByRecipient = false;
-
-            if (message.senderId === currentUserId) { // اگر پیام ارسالی توسط کاربر فعلی است
-                if (chat.type === 'private') {
-                    const otherMemberInfo = chat.members.find(m => m.id !== currentUserId)?.ChatMember;
-                    if (otherMemberInfo && otherMemberInfo.lastReadMessageId) {
-                        // آیا پیام فعلی یا پیام‌های قدیمی‌تر از آن، توسط کاربر دیگر خوانده شده؟
-                        // این مقایسه با ID ممکن است دقیق نباشد اگر ID ها ترتیب زمانی ندارند
-                        // بهتر است با createdAt مقایسه شود یا یک کوئری برای شمارش پیام های خوانده نشده زده شود
-                        // ساده سازی: اگر ID پیام فعلی، آخرین پیام خوانده شده توسط دیگری است یا قبل از آن
-                        const lastReadByOther = await Message.findByPk(otherMemberInfo.lastReadMessageId, { attributes: ['createdAt'] });
-                        if (lastReadByOther && new Date(message.createdAt) <= new Date(lastReadByOther.createdAt)) {
-                            message.deliveryStatus = 'read';
-                            message.readByRecipient = true;
-                        } else {
-                            // برای delivered: اگر بخواهیم ذخیره کنیم، باید مکانیزم داشته باشیم
-                            // فعلا اگر read نشده، sent در نظر می گیریم برای تاریخچه
-                            // یا اگر بخواهیم delivered را هم در نظر بگیریم، باید یک فیلد جدا در Message یا جدول MessageReceipts داشته باشیم
-                            message.deliveryStatus = 'delivered'; // فرض می کنیم اگر خوانده نشده، حداقل تحویل داده شده (این فرض ممکن است همیشه درست نباشد)
-                        }
-                    } else {
-                        message.deliveryStatus = 'sent'; // اگر اطلاعات خوانده شدن کاربر دیگر موجود نیست
-                    }
-                } else if (chat.type === 'group') {
-                    // برای گروه، وضعیت read پیچیده است.
-                    // می توان بررسی کرد آیا *حداقل یک* عضو دیگر آن را خوانده یا *همه* خوانده اند.
-                    // ساده سازی: فعلا برای گروه، پیام های ارسالی خودمان را 'delivered' در نظر می گیریم (اگر بخواهیم از 'sent' متفاوت باشد)
-                    // یا اگر می خواهیم دقیق تر باشیم، ببینیم آخرین پیام خوانده شده توسط *هر* عضو دیگر چیست
-                    let someoneElseReadIt = false;
-                    for (const member of chat.members) {
-                        if (member.id !== currentUserId && member.ChatMember?.lastReadMessageId) {
-                            const lastReadByThisMember = await Message.findByPk(member.ChatMember.lastReadMessageId, { attributes: ['createdAt'] });
-                            if (lastReadByThisMember && new Date(message.createdAt) <= new Date(lastReadByThisMember.createdAt)) {
-                                someoneElseReadIt = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (someoneElseReadIt) {
-                        message.deliveryStatus = 'read'; // یا یک وضعیت خاص مثل 'readBySome'
-                        message.readByRecipient = true; // به معنی اینکه حداقل یک نفر خوانده
-                    } else {
-                        message.deliveryStatus = 'delivered'; // فرض بر اینکه به گروه تحویل داده شده
-                    }
-                }
-            }
-            return message;
-        }));
-
-        res.json(processedMessages.reverse()); // برگرداندن به ترتیب زمانی صحیح (قدیمی به جدید)
+        res.json(requestedOrder === 'DESC' ? messagesFromDB.reverse() : messagesFromDB);
 
     } catch (error) {
-        console.error('Error fetching messages with status:', error);
+        console.error('Error fetching messages:', error);
         res.status(500).json({ success: false, message: 'Server error fetching messages' });
     }
 };
 
-const createSystemMessage = async (chatId, content, transaction = null) => {
-    return Message.create({
+// Helper to create system messages
+const createSystemMessageAndUpdateChat = async (chatId, content, transaction = null) => {
+    const systemMessage = await Message.create({
         chatId,
         content,
         contentType: 'system',
-        // senderId برای پیام سیستمی می‌تواند null باشد
+        deliveryStatus: 'sent',
     }, { transaction });
+
+    await Chat.update(
+        { lastMessageId: systemMessage.id, updatedAt: new Date() },
+        { where: { id: chatId }, transaction }
+    );
+    return systemMessage;
 };
 
 
@@ -375,68 +286,61 @@ exports.createGroupChat = async (req, res) => {
         return res.status(400).json({ success: false, errors: errors.array() });
     }
 
-    const { name, memberIds } = req.body; // name: نام گروه, memberIds: آرایه‌ای از ID کاربران برای اضافه شدن به گروه
+    const { name, memberIds = [], groupImageUrl } = req.body;
     const creatorId = req.user.id;
 
     if (!name || name.trim() === '') {
         return res.status(400).json({ success: false, message: 'Group name is required.' });
     }
 
-    // مطمئن شو creatorId در memberIds نیست (یا اگر هست، فقط یکبار و با نقش ادمین اضافه شود)
-    // و حداقل یک عضو دیگر به جز ایجادکننده وجود داشته باشد (یا اینکه گروه تک نفره مجاز باشد؟)
-    // فعلا فرض می کنیم ایجاد کننده هم باید در memberIds باشد یا خودمان اضافه اش می کنیم.
-
-    const finalMemberIds = [...new Set([creatorId, ...(memberIds || [])])]; // اطمینان از وجود ایجادکننده و عدم تکرار
-
-    if (finalMemberIds.length < 2) { // معمولا گروه حداقل دو نفر است، اما بسته به نیاز شما
-        // return res.status(400).json({ success: false, message: 'A group must have at least one other member besides the creator.' });
-    }
+    const finalMemberIds = [...new Set([creatorId, ...memberIds])];
 
     const t = await sequelize.transaction();
     try {
-        // ۱. ایجاد چت از نوع گروه
         const newGroup = await Chat.create({
             type: 'group',
             name,
             creatorId,
+            groupImageUrl,
         }, { transaction: t });
 
-        // ۲. اضافه کردن اعضا به گروه
         const chatMembersData = finalMemberIds.map(userId => ({
             chatId: newGroup.id,
             userId,
-            role: userId === creatorId ? 'admin' : 'member', // ایجادکننده، ادمین است
+            role: userId === creatorId ? 'admin' : 'member',
         }));
         await ChatMember.bulkCreate(chatMembersData, { transaction: t });
 
-        // ۳. (اختیاری) ایجاد یک پیام سیستمی "گروه ایجاد شد"
         const creatorUser = await User.findByPk(creatorId, { attributes: ['displayName', 'username']});
         const creatorName = creatorUser.displayName || creatorUser.username;
-        await createSystemMessage(newGroup.id, `${creatorName} created the group "${name}"`, t);
-        // شما می توانید آخرین پیام گروه را هم با این پیام سیستمی آپدیت کنید.
-        // یا بگذارید اولین پیام واقعی کاربران، lastMessageId را آپدیت کند.
+        const systemMessage = await createSystemMessageAndUpdateChat(
+            newGroup.id,
+            `${creatorName} created the group "${name}"`,
+            t
+        );
 
         await t.commit();
 
-        // برگرداندن اطلاعات کامل گروه جدید (شامل اعضا)
         const groupDetails = await Chat.findByPk(newGroup.id, {
             include: [
                 { model: User, as: 'creator', attributes: ['id', 'username', 'displayName'] },
+                { model: User, as: 'members', attributes: ['id', 'username', 'displayName', 'profileImageUrl'], through: { attributes: ['role'] }},
                 {
-                    model: User,
-                    as: 'members',
-                    attributes: ['id', 'username', 'displayName', 'profileImageUrl'],
-                    through: { attributes: ['role'] } // برای گرفتن نقش از جدول ChatMember
-                },
-                // { model: Message, as: 'lastMessage' } // اگر پیام سیستمی را به عنوان آخرین پیام ست کردید
+                    model: Message,
+                    as: 'lastMessage',
+                    attributes: ['id', 'chatId', 'senderId', 'content', 'contentType', 'fileUrl', 'deliveryStatus', 'createdAt', 'updatedAt'],
+                    include: [{model: User, as: 'sender', attributes: ['id', 'username', 'displayName', 'profileImageUrl']}]
+                }
             ]
         });
+        const formattedGroup = await formatChatResponse(groupDetails, creatorId);
 
-        // TODO: به اعضای گروه از طریق سوکت اطلاع بده که به گروه جدید اضافه شده‌اند
-        // io.to(memberId1).emit('newChat', groupDetails);
-        // io.to(memberId2).emit('newChat', groupDetails); ...
-
-        res.status(201).json(await formatChatResponse(groupDetails, creatorId)); // از تابع formatChatResponse قبلی استفاده می‌کنیم
+        if (io && formattedGroup) {
+            finalMemberIds.forEach(memberId => {
+                io.to(memberId).emit('newChat', formattedGroup);
+            });
+        }
+        res.status(201).json(formattedGroup);
 
     } catch (error) {
         await t.rollback();
@@ -459,89 +363,69 @@ exports.addMemberToGroup = async (req, res) => {
     }
 
     const { chatId } = req.params;
-    const { userId: userIdToAdd } = req.body; // کاربری که باید اضافه شود
-    const adminUser = req.user; // ادمینی که درخواست را داده (از protect و ensureGroupAdmin)
+    const { userId: userIdToAdd } = req.body;
+    const adminUser = req.user;
+    const chat = req.chat;
 
     if (!userIdToAdd) {
         return res.status(400).json({ success: false, message: 'User ID to add is required.' });
     }
-
     if (userIdToAdd === adminUser.id) {
         return res.status(400).json({ success: false, message: 'Admin is already a member.' });
     }
 
     const t = await sequelize.transaction();
     try {
-        // req.chat از میان‌افزار ensureGroupAdmin می‌آید
-        const chat = req.chat;
-
-        // بررسی اینکه آیا کاربر جدید یک کاربر معتبر است
-        const userToAdInstance = await User.findByPk(userIdToAdd);
-        if (!userToAdInstance) {
+        const userToAddInstance = await User.findByPk(userIdToAdd);
+        if (!userToAddInstance) {
             await t.rollback();
             return res.status(404).json({ success: false, message: 'User to add not found.' });
         }
 
-        // بررسی اینکه آیا کاربر از قبل عضو گروه است
-        const existingMembership = await ChatMember.findOne({
-            where: { chatId, userId: userIdToAdd },
-            transaction: t // برای اطمینان از خواندن در همان تراکنش
-        });
-
+        const existingMembership = await ChatMember.findOne({ where: { chatId, userId: userIdToAdd }, transaction: t });
         if (existingMembership) {
             await t.rollback();
             return res.status(400).json({ success: false, message: 'User is already a member of this group.' });
         }
 
-        // اضافه کردن کاربر به عنوان عضو جدید
-        const newMember = await ChatMember.create({
-            chatId,
-            userId: userIdToAdd,
-            role: 'member', // به طور پیش‌فرض، عضو جدید نقش 'member' دارد
-        }, { transaction: t });
+        const newMember = await ChatMember.create({ chatId, userId: userIdToAdd, role: 'member' }, { transaction: t });
 
-        // ایجاد پیام سیستمی
         const adminName = adminUser.displayName || adminUser.username;
-        const newMemberName = userToAdInstance.displayName || userToAdInstance.username;
+        const newMemberName = userToAddInstance.displayName || userToAddInstance.username;
         const systemMessageContent = `${adminName} added ${newMemberName} to the group.`;
-        const systemMessage = await createSystemMessage(chatId, systemMessageContent, t);
-
-        // آپدیت lastMessageId و updatedAt برای چت
-        await chat.update({ lastMessageId: systemMessage.id, updatedAt: new Date() }, { transaction: t });
+        const systemMessage = await createSystemMessageAndUpdateChat(chatId, systemMessageContent, t);
 
         await t.commit();
 
-        // برگرداندن اطلاعات عضو جدید (یا کل گروه آپدیت شده)
-        // برای سادگی، فقط پیام موفقیت‌آمیز برمی‌گردانیم. کلاینت می‌تواند لیست اعضا را دوباره fetch کند.
-        // یا می‌توانید اطلاعات عضو جدید را برگردانید:
         const addedMemberDetails = {
-            userId: newMember.userId,
-            username: userToAdInstance.username,
-            displayName: userToAdInstance.displayName,
-            profileImageUrl: userToAdInstance.profileImageUrl,
+            id: newMember.userId,
+            username: userToAddInstance.username,
+            displayName: userToAddInstance.displayName,
+            profileImageUrl: userToAddInstance.profileImageUrl,
             role: newMember.role,
-            joinedAt: newMember.joinedAt
+            ChatMember: { role: newMember.role, joinedAt: newMember.joinedAt }
         };
 
-        // TODO: به کاربر جدید و سایر اعضای گروه از طریق سوکت اطلاع بده
-        // io.to(userIdToAdd).emit('addedToGroup', await formatChatResponse(chat, userIdToAdd)); // به کاربر جدید
-        // chat.members.forEach(member => { (اعضای قبلی)
-        //    if(member.id !== userIdToAdd && member.id !== adminUser.id)
-        //        io.to(member.id).emit('memberAddedToGroup', { chatId, newMember: addedMemberDetails, systemMessage });
-        // });
-        // io.to(adminUser.id).emit('memberAddedToGroup', ...); // به خود ادمین هم می توان فرستاد
-        // یا یک رویداد کلی به روم چت:
-        // io.to(chatId).emit('groupUpdate', { type: 'member_added', actor: adminUser, target: userToAdInstance, systemMessage });
+        if (io) {
+            const fullChatDetails = await Chat.findByPk(chatId, {
+                include: [ { model: User, as: 'members', attributes: ['id', 'username', 'displayName', 'profileImageUrl'], through: {attributes: ['role']} }]
+            });
+            const formattedChat = await formatChatResponse(fullChatDetails, null);
 
+            (fullChatDetails.members || []).forEach(member => {
+                io.to(member.id).emit('memberAddedToGroup', {
+                    chatId,
+                    addedMember: addedMemberDetails,
+                    actor: { id: adminUser.id, name: adminName },
+                    systemMessage: systemMessage.toJSON(),
+                    updatedChat: formattedChat
+                });
+            });
+        }
 
-        res.status(201).json({
-            success: true,
-            message: `${newMemberName} added to the group.`,
-            member: addedMemberDetails
-        });
-
+        res.status(201).json({ success: true, message: `${newMemberName} added.`, member: addedMemberDetails });
     } catch (error) {
-        await t.rollback();
+        if (!t.finished) await t.rollback();
         console.error('Error adding member to group:', error);
         res.status(500).json({ success: false, message: 'Server error while adding member.' });
     }
@@ -549,105 +433,75 @@ exports.addMemberToGroup = async (req, res) => {
 
 
 // @desc    Leave a group chat
-// @route   DELETE /api/chats/:chatId/members/me  (یا POST /api/chats/:chatId/leave)
+// @route   DELETE /api/chats/:chatId/members/me
 // @access  Private (Member of the group)
 exports.leaveGroupChat = async (req, res) => {
     const { chatId } = req.params;
     const userIdLeaving = req.user.id;
-    // const chat = req.chat; // اگر از middleware ای استفاده می کنید که چت را attach می کند
 
     const t = await sequelize.transaction();
     try {
-        const chat = await Chat.findByPk(chatId); // ابتدا چت را پیدا کن
-        if (!chat) {
+        const chat = await Chat.findByPk(chatId);
+        if (!chat || chat.type !== 'group') {
             await t.rollback();
-            return res.status(404).json({ success: false, message: 'Chat not found.' });
-        }
-        if (chat.type !== 'group') {
-            await t.rollback();
-            return res.status(400).json({ success: false, message: 'This operation is only for group chats.' });
+            return res.status(chat ? 400 : 404).json({ success: false, message: chat ? 'Operation only for group chats.' : 'Chat not found.' });
         }
 
-        const membership = await ChatMember.findOne({
-            where: { chatId, userId: userIdLeaving },
-            transaction: t,
-        });
-
+        const membership = await ChatMember.findOne({ where: { chatId, userId: userIdLeaving }, transaction: t });
         if (!membership) {
             await t.rollback();
-            return res.status(404).json({ success: false, message: 'You are not a member of this group.' });
+            return res.status(403).json({ success: false, message: 'You are not a member of this group.' });
         }
 
         await membership.destroy({ transaction: t });
 
-        // منطق مدیریت ادمین:
-        // اگر کاربر خارج شده ادمین بود و آخرین ادمین گروه بود، چه اتفاقی بیفتد؟
-        // ۱. گروه حذف شود؟
-        // ۲. یک عضو دیگر به صورت تصادفی ادمین شود؟
-        // ۳. گروه بدون ادمین بماند (باید منطق برنامه این را پشتیبانی کند)؟
-        // فعلا این بخش را ساده نگه می داریم.
+        const userLeavingDetails = req.user;
+        const userName = userLeavingDetails.displayName || userLeavingDetails.username;
+        let systemMessageContent = `${userName} left the group.`;
+        let newAdminName = null;
+
         if (membership.role === 'admin') {
             const remainingAdmins = await ChatMember.count({ where: { chatId, role: 'admin' }, transaction: t});
             if (remainingAdmins === 0) {
-                // اگر هیچ ادمین دیگری باقی نماند
-                const remainingMembers = await ChatMember.count({ where: { chatId }, transaction: t });
-                if (remainingMembers > 0) {
-                    // یک عضو دیگر را به ادمین ارتقا بده (مثلا اولین عضو باقی مانده بر اساس joinedAt)
-                    const newAdminCandidate = await ChatMember.findOne({
-                        where: { chatId },
-                        order: [['joinedAt', 'ASC']], // یا createdAt جدول ChatMember
-                        transaction: t,
-                    });
-                    if (newAdminCandidate) {
-                        await newAdminCandidate.update({ role: 'admin' }, { transaction: t });
-                        // ایجاد پیام سیستمی برای ارتقا ادمین جدید
-                        const newAdminUser = await User.findByPk(newAdminCandidate.userId, { attributes: ['displayName', 'username']});
-                        const newAdminName = newAdminUser.displayName || newAdminUser.username;
-                        await createSystemMessage(chatId, `${newAdminName} is now an admin.`, t);
-                    }
+                const remainingMembers = await ChatMember.findAll({ where: { chatId }, order: [['joinedAt', 'ASC']], limit: 1, transaction: t });
+                if (remainingMembers.length > 0) {
+                    const newAdminCandidate = remainingMembers[0];
+                    await newAdminCandidate.update({ role: 'admin' }, { transaction: t });
+                    const newAdminUser = await User.findByPk(newAdminCandidate.userId, { attributes: ['displayName', 'username'], transaction: t });
+                    newAdminName = newAdminUser.displayName || newAdminUser.username;
+                    systemMessageContent += ` ${newAdminName} is now an admin.`;
                 } else {
-                    // اگر هیچ عضوی باقی نماند، گروه را حذف کن
                     await Chat.destroy({ where: { id: chatId }, transaction: t });
-                    console.log(`Group ${chatId} deleted as last member (admin) left.`);
-                    // TODO: به سوکت ها اطلاع داده شود که گروه حذف شده
+                    console.log(`Group ${chatId} deleted as last member left.`);
+                    if (io) io.to(userIdLeaving).emit('groupDeleted', { chatId });
+                    await t.commit();
+                    return res.status(200).json({ success: true, message: 'Successfully left and group deleted.' });
                 }
             }
         }
 
-
-        // ایجاد پیام سیستمی
-        const userLeavingDetails = req.user;
-        const userName = userLeavingDetails.displayName || userLeavingDetails.username;
-        const systemMessageContent = `${userName} left the group.`;
-        const systemMessage = await createSystemMessage(chatId, systemMessageContent, t);
-
-        // آپدیت lastMessageId و updatedAt چت
-        // فقط اگر گروه هنوز وجود دارد
-        const groupExistsAfterLeave = await Chat.findByPk(chatId, { transaction: t, attributes: ['id']});
-        if (groupExistsAfterLeave) {
-            await Chat.update(
-                { lastMessageId: systemMessage.id, updatedAt: new Date() },
-                { where: { id: chatId }, transaction: t }
-            );
-        }
-
+        const systemMessage = await createSystemMessageAndUpdateChat(chatId, systemMessageContent, t);
         await t.commit();
 
-        // ** اطلاع رسانی از طریق سوکت **
-        if (groupExistsAfterLeave && io) {
-            const membersOfGroup = await chat.getMembers({ attributes: ['id'] }); // اعضای باقی مانده
-            membersOfGroup.forEach(member => {
-                io.to(member.id).emit('memberLeftGroup', {
+        if (io) {
+            const remainingMembers = await ChatMember.findAll({ where: { chatId }, include: [{model: User, as: 'user', attributes: ['id']}]});
+            const fullChatDetails = await Chat.findByPk(chatId, {
+                include: [ { model: User, as: 'members', attributes: ['id', 'username', 'displayName', 'profileImageUrl'], through: {attributes: ['role']} }]
+            });
+            const formattedChat = await formatChatResponse(fullChatDetails, null);
+
+            remainingMembers.forEach(member => {
+                io.to(member.userId).emit('memberLeftGroup', {
                     chatId,
                     userId: userIdLeaving,
-                    actor: {id: userIdLeaving, name: userName }
+                    actor: { id: userIdLeaving, name: userName },
+                    systemMessage: systemMessage.toJSON(),
+                    newAdminName: newAdminName,
+                    updatedChat: formattedChat
                 });
-                io.to(member.id).emit('newMessage', { ...systemMessage.toJSON(), tempId: `sys_${Date.now()}` });
             });
-            // به خود کاربر خارج شده هم اطلاع بده که با موفقیت خارج شده (اختیاری، چون کلاینت معمولا UI را آپدیت می کند)
             io.to(userIdLeaving).emit('leftGroupSuccessfully', { chatId });
         }
-
 
         res.status(200).json({ success: true, message: 'Successfully left the group.' });
 
@@ -664,75 +518,66 @@ exports.leaveGroupChat = async (req, res) => {
 // @access  Private (Admin only)
 exports.removeMemberFromGroup = async (req, res) => {
     const { chatId, memberIdToRemove } = req.params;
-    const adminUser = req.user; // ادمینی که درخواست را ارسال کرده
-    // req.chat از ensureGroupAdmin
+    const adminUser = req.user;
+    const chat = req.chat;
 
     if (memberIdToRemove === adminUser.id) {
-        return res.status(400).json({ success: false, message: "Admin cannot remove themselves using this endpoint. Use 'leave group' instead." });
+        return res.status(400).json({ success: false, message: "Admin cannot remove themselves. Use 'leave group'." });
     }
 
     const t = await sequelize.transaction();
     try {
-        const userToRemoveDetails = await User.findByPk(memberIdToRemove, { attributes: ['id', 'displayName', 'username']});
-        if (!userToRemoveDetails) {
+        const userToRemoveInstance = await User.findByPk(memberIdToRemove, { attributes: ['id', 'displayName', 'username'] });
+        if (!userToRemoveInstance) {
             await t.rollback();
             return res.status(404).json({ success: false, message: 'User to remove not found.' });
         }
 
-        const membershipToRemove = await ChatMember.findOne({
-            where: { chatId, userId: memberIdToRemove },
-            transaction: t,
-        });
-
+        const membershipToRemove = await ChatMember.findOne({ where: { chatId, userId: memberIdToRemove }, transaction: t });
         if (!membershipToRemove) {
             await t.rollback();
             return res.status(404).json({ success: false, message: 'User is not a member of this group.' });
         }
 
-        // اگر ادمین دیگری سعی در حذف یک ادمین دیگر دارد (بسته به سیاست برنامه)
-        // if (membershipToRemove.role === 'admin' && req.chat.creatorId !== adminUser.id) {
-        //   // فقط ایجاد کننده اصلی گروه می تواند سایر ادمین ها را حذف کند (یک نمونه سیاست)
-        //   await t.rollback();
-        //   return res.status(403).json({ success: false, message: 'Only the group creator can remove other admins.' });
-        // }
+        if (membershipToRemove.role === 'admin' && chat.creatorId !== adminUser.id && chat.creatorId === memberIdToRemove) {
+            await t.rollback();
+            return res.status(403).json({ success: false, message: 'Cannot remove the group creator.' });
+        }
+        if (membershipToRemove.role === 'admin' && chat.creatorId !== adminUser.id) {
+            await t.rollback();
+            return res.status(403).json({ success: false, message: 'Only the group creator can remove other admins.' });
+        }
+
 
         await membershipToRemove.destroy({ transaction: t });
 
-        // ایجاد پیام سیستمی
-        const removedUserName = userToRemoveDetails.displayName || userToRemoveDetails.username;
+        const removedUserName = userToRemoveInstance.displayName || userToRemoveInstance.username;
         const adminName = adminUser.displayName || adminUser.username;
         const systemMessageContent = `${adminName} removed ${removedUserName} from the group.`;
-        const systemMessage = await createSystemMessage(chatId, systemMessageContent, t);
-
-        // آپدیت lastMessageId و updatedAt چت
-        await Chat.update(
-            { lastMessageId: systemMessage.id, updatedAt: new Date() },
-            { where: { id: chatId }, transaction: t }
-        );
+        const systemMessage = await createSystemMessageAndUpdateChat(chatId, systemMessageContent, t);
 
         await t.commit();
 
-        // ** اطلاع رسانی از طریق سوکت **
         if (io) {
-            // به کاربر حذف شده اطلاع بده
-            io.to(memberIdToRemove).emit('removedFromGroup', { chatId, groupName: req.chat.name, actorName: adminName });
+            const fullChatDetails = await Chat.findByPk(chatId, {
+                include: [ { model: User, as: 'members', attributes: ['id', 'username', 'displayName', 'profileImageUrl'], through: {attributes: ['role']} }]
+            });
+            const formattedChat = await formatChatResponse(fullChatDetails, null);
 
-            // به سایر اعضای گروه اطلاع بده
-            const chat = req.chat;
-            const membersOfGroup = await chat.getMembers({ attributes: ['id'] });
-            membersOfGroup.forEach(member => {
-                if (member.id !== memberIdToRemove) { // به جز کاربر حذف شده
-                    io.to(member.id).emit('memberRemovedFromGroup', {
-                        chatId,
-                        userIdRemoved: memberIdToRemove,
-                        actor: {id: adminUser.id, name: adminName }
-                    });
-                    io.to(member.id).emit('newMessage', { ...systemMessage.toJSON(), tempId: `sys_${Date.now()}` });
-                }
+            io.to(memberIdToRemove).emit('removedFromGroup', { chatId, groupName: chat.name, actorName: adminName, updatedChat: null });
+            const remainingMembers = await ChatMember.findAll({ where: { chatId }, include: [{model: User, as: 'user', attributes: ['id']}]});
+            remainingMembers.forEach(member => {
+                io.to(member.userId).emit('memberRemovedFromGroup', {
+                    chatId,
+                    userIdRemoved: memberIdToRemove,
+                    actor: { id: adminUser.id, name: adminName },
+                    systemMessage: systemMessage.toJSON(),
+                    updatedChat: formattedChat
+                });
             });
         }
 
-        res.status(200).json({ success: true, message: 'User removed from the group successfully.' });
+        res.status(200).json({ success: true, message: 'User removed successfully.' });
 
     } catch (error) {
         if (!t.finished) await t.rollback();

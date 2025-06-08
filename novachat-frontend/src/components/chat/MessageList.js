@@ -1,31 +1,30 @@
-import React, { useEffect, useRef } from 'react'; // useRef اضافه شد
+import React from 'react';
 import MessageItem from './MessageItem';
 import './MessageList.css';
+
+const MESSAGES_PER_PAGE = 30; // Ensure this matches the value in ChatWindow.js
 
 function MessageList({
                          messages,
                          currentUser,
-                         isLoadingInitial, // تغییر نام از isLoading
+                         isLoadingInitial,
                          isLoadingOlder,
                          hasMoreMessages,
                          onLoadMore,
-                         messagesListRef, // دریافت ref از والد
-                         messagesEndRef
+                         messagesListRef,
+                         messagesEndRef // Ref for the very end of the list
                      }) {
 
-
-
-    if (isLoadingInitial) { // استفاده از isLoadingInitial
+    if (isLoadingInitial && messages.length === 0) {
         return <div className="message-list-status">Loading messages...</div>;
     }
 
-    if (!isLoadingInitial && messages.length === 0) {
+    if (!isLoadingInitial && messages.length === 0 && !hasMoreMessages) { // Added !hasMoreMessages condition
         return <div className="message-list-status">No messages yet. Say hi!</div>;
     }
 
-
     return (
-        <div className="message-list-area" ref={messagesListRef}> {/* استفاده از ref */}
+        <div className="message-list-area" ref={messagesListRef}>
             {hasMoreMessages && (
                 <div className="load-more-container">
                     <button onClick={onLoadMore} disabled={isLoadingOlder} className="load-more-button">
@@ -33,21 +32,20 @@ function MessageList({
                     </button>
                 </div>
             )}
-            {!hasMoreMessages && messages.length > MESSAGES_PER_PAGE && ( // MESSAGES_PER_PAGE باید از جایی import یا تعریف شود
+            {!hasMoreMessages && messages.length > 0 && ( // Check if messages exist before showing "no more"
                 <div className="message-list-status small">No more messages to load.</div>
             )}
 
             {messages.map((msg, index) => (
                 <MessageItem
-                    key={msg.id || msg.tempId || index}
+                    key={msg.id || msg.tempId || `msg-${index}`} // Ensure key is always unique
                     message={msg}
-                    isOwnMessage={msg.senderId === currentUser.id}
+                    isOwnMessage={currentUser && msg.senderId === currentUser.id} // Ensure currentUser is available
                 />
             ))}
-            <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} className="message-list-end-spacer" /> {/* Spacer for scrolling */}
         </div>
     );
 }
-const MESSAGES_PER_PAGE = 30; // باید با مقدار ChatWindow یکی باشد
 
 export default MessageList;

@@ -1,15 +1,12 @@
 /* src/components/chat/ChatWindow.css */
 
 .chat-window-container {
-    flex-grow: 1; /* برای پر کردن فضای باقی مانده در ChatPage */
+    flex-grow: 1;
     display: flex;
     flex-direction: column;
-    background-color: #e5ddd5; /* رنگ پس‌زمینه اصلی شبیه واتس‌اپ */
-    /* برای استفاده از تصویر پس‌زمینه:
-    background-image: url('/path-to-your-chat-background-image.png');
-    background-repeat: repeat;
-    */
-    overflow: hidden; /* جلوگیری از اسکرول کلی و مدیریت اسکرول داخلی */
+    background-color: var(--chat-bg-light);
+    overflow: hidden;
+    height: 100%; /* Ensure it takes full height from parent */
 }
 
 .chat-window-placeholder {
@@ -19,158 +16,157 @@
     justify-content: center;
     align-items: center;
     text-align: center;
-    color: #54656f; /* رنگ متن placeholder */
-    background-color: #f0f2f5; /* یک پس‌زمینه متفاوت برای placeholder */
-    padding: 20px;
+    color: var(--on-surface-secondary-color);
+    background-color: #f8f9fa; /* Slightly off-white, cleaner than default chat bg */
+    padding: var(--spacing-lg);
     font-size: 1.1em;
+    border-radius: var(--border-radius-lg); /* Optional: round corners if it's overlaid */
+    margin: var(--spacing-md); /* Optional: some margin if preferred */
 }
 
 .chat-window-placeholder p {
-    margin: 5px 0;
+    margin: var(--spacing-xs) 0;
+}
+.chat-window-placeholder svg { /* Style for a potential placeholder icon */
+    width: 60px;
+    height: 60px;
+    color: var(--secondary-color);
+    opacity: 0.5;
+    margin-bottom: var(--spacing-md);
 }
 
 /* --- Header Styles --- */
 .chat-window-header {
-    background-color: #f0f2f5; /* رنگ پس‌زمینه هدر */
-    padding: 10px 16px; /* پدینگ داخلی */
-    border-bottom: 1px solid #e0e0e0; /* خط جداکننده پایین */
+    background-color: var(--chat-header-bg);
+    padding: 0 var(--spacing-md); /* Horizontal padding */
+    border-bottom: 1px solid var(--border-color);
     display: flex;
     align-items: center;
-    min-height: 60px; /* حداقل ارتفاع برای هدر */
+    height: var(--header-height); /* Use variable for height */
     box-sizing: border-box;
-    flex-shrink: 0; /* جلوگیری از کوچک شدن هدر در صورت کمبود فضا */
+    flex-shrink: 0;
 }
 
 .chat-header-avatar {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background-color: #bdbdbd; /* رنگ پیش‌فرض آواتار */
+    background-color: var(--secondary-color); /* Default avatar bg */
     color: white;
     display: flex;
     justify-content: center;
     align-items: center;
     font-weight: bold;
-    font-size: 1.1em; /* اندازه فونت برای حرف اول نام */
-    margin-right: 12px;
-    position: relative; /* برای نقطه وضعیت آنلاین */
-    flex-shrink: 0; /* جلوگیری از کوچک شدن آواتار */
+    font-size: 1.1em;
+    margin-right: var(--spacing-md);
+    position: relative;
+    flex-shrink: 0;
+    overflow: hidden; /* Ensure image is clipped if not perfectly round */
 }
+.chat-header-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.chat-header-avatar svg { /* For group icon */
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
+
 
 .header-status-dot {
     width: 10px;
     height: 10px;
     border-radius: 50%;
     position: absolute;
-    bottom: 0;
-    right: 0;
-    border: 2px solid #f0f2f5; /* رنگ پس‌زمینه هدر برای ایجاد فاصله */
+    bottom: 1px; /* Adjusted for better visual */
+    right: 1px;
+    border: 2px solid var(--chat-header-bg);
 }
-
 .header-status-dot.online {
-    background-color: #4caf50; /* سبز برای آنلاین */
+    background-color: var(--online-status-color);
 }
-/* می‌توانید برای وضعیت‌های دیگر هم استایل تعریف کنید */
-
 
 .chat-header-info {
     display: flex;
     flex-direction: column;
-    align-items: flex-start; /* متن‌ها از چپ تراز شوند */
-    flex-grow: 1; /* فضای باقی مانده را پر کند */
-    overflow: hidden; /* برای جلوگیری از سرریز متن‌های طولانی */
-    margin-right: 10px; /* فاصله از اکشن‌های احتمالی سمت راست */
+    align-items: flex-start;
+    flex-grow: 1;
+    overflow: hidden;
+    margin-right: var(--spacing-sm);
 }
 
 .chat-header-info h3 {
     margin: 0;
-    font-size: 1.05em; /* اندازه نام کاربر/گروه */
-    color: #111b21; /* رنگ تیره برای نام */
+    font-size: 1.05em;
+    color: var(--on-surface-color);
     font-weight: 500;
-    white-space: nowrap; /* جلوگیری از شکستن خط نام */
-    overflow: hidden; /* مخفی کردن سرریز */
-    text-overflow: ellipsis; /* نمایش ... برای نام طولانی */
-    max-width: 100%; /* برای اینکه ellipsis کار کند */
-}
-
-.chat-status-text {
-    font-size: 0.8em; /* اندازه متن وضعیت */
-    color: #667781; /* رنگ پیش‌فرض برای آفلاین یا last seen */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100%; /* برای اینکه ellipsis کار کند */
-    margin-top: 2px; /* فاصله کم از نام */
+    max-width: 100%;
 }
 
+.chat-status-text {
+    font-size: 0.8em;
+    color: var(--on-surface-secondary-color);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    margin-top: 2px;
+}
 .chat-status-text.online {
-    color: #00a859; /* رنگ سبز برای آنلاین */
+    color: var(--online-status-color);
     font-weight: 500;
+}
+.chat-status-text.group-info {
+    color: var(--on-surface-secondary-color);
 }
 
 .chat-header-actions {
-    /* برای دکمه‌های تماس، منو و ... در سمت راست هدر */
     display: flex;
     align-items: center;
     flex-shrink: 0;
 }
 
-.chat-header-actions button {
+.chat-header-action-button {
     background: none;
     border: none;
-    color: #54656f; /* رنگ آیکون‌ها */
-    padding: 8px;
-    margin-left: 8px;
+    color: var(--on-surface-secondary-color);
+    padding: var(--spacing-sm);
+    margin-left: var(--spacing-xs);
     cursor: pointer;
-    font-size: 1.3em; /* اندازه آیکون‌ها */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%; /* Make action buttons round */
+    transition: background-color 0.15s ease-in-out, color 0.15s ease-in-out;
 }
-.chat-header-actions button:hover {
-    color: #007bff; /* تغییر رنگ در هاور */
+.chat-header-action-button:hover {
+    background-color: rgba(0,0,0,0.05);
+    color: var(--primary-color);
+}
+.chat-header-action-button svg {
+    width: 22px;
+    height: 22px;
 }
 
 
 /* --- Typing Indicator Styles --- */
 .typing-indicator {
-    padding: 0px 20px 5px 20px; /* پدینگ هماهنگ با MessageList */
+    padding: var(--spacing-xs) var(--spacing-lg); /* Consistent with MessageList padding */
     font-size: 0.85em;
-    color: #667781; /* رنگ متن */
+    color: var(--on-surface-secondary-color);
     font-style: italic;
-    height: 20px; /* ارتفاع ثابت برای جلوگیری از پرش صفحه */
+    height: 24px; /* Ensure space even if empty, for layout stability */
+    line-height: 24px; /* Vertical align text */
     box-sizing: border-box;
-    flex-shrink: 0; /* جلوگیری از کوچک شدن */
-    background-color: #e5ddd5; /* هماهنگ با پس‌زمینه اصلی چت */
-    /* یا اگر می‌خواهید در یک نوار جدا باشد:
-    background-color: #f0f2f5;
-    border-top: 1px solid #e0e0e0;
-    */
-    line-height: 20px; /* برای تراز عمودی متن */
-    text-align: left; /* یا center */
+    flex-shrink: 0;
+    background-color: var(--chat-bg-light); /* Match chat background */
+    text-align: left;
 }
-
-.chat-header-avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: 50%;
-}
-.chat-status-text.group-info {
-    color: #455a64; /* رنگ متفاوت برای اطلاعات گروه */
-}
-.chat-header-action-button {
-    background: none;
-    border: none;
-    color: #54656f;
-    padding: 8px;
-    margin-left: 8px; /* فاصله از اطلاعات نام/وضعیت */
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.chat-header-action-button:hover {
-    color: #007bff;
-}
-.chat-header-action-button svg {
-    width: 22px;
-    height: 22px;
+.typing-indicator:empty { /* Hide if no content */
+    display: none;
 }

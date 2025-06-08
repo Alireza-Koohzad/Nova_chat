@@ -72,8 +72,8 @@ function UserSearch({currentUser, onChatStartedOrSelected}) {
                 onChange={handleInputChange}
                 className="user-search-input"
             />
-            {isLoading && <div className="search-loading">Searching...</div>}
-            {error && <div className="search-error">{error}</div>}
+            {isLoading && <div className="search-status-message">Searching...</div>}
+            {error && <div className="search-status-message error">{error}</div>}
             {searchResults.length > 0 && (
                 <ul className="search-results-list">
                     {searchResults.map(user => (
@@ -85,7 +85,7 @@ function UserSearch({currentUser, onChatStartedOrSelected}) {
                 </ul>
             )}
             {searchTerm.length > 1 && searchResults.length === 0 && !isLoading && !error && (
-                <div className="no-results-found">No users found.</div>
+                <div className="search-status-message">No users found.</div>
             )}
         </div>
     );

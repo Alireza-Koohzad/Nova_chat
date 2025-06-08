@@ -4,94 +4,104 @@
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    background-color: #f0f2f5; /* یک رنگ پس‌زمینه ملایم */
-    padding: 20px;
+    background-color: var(--background-color);
+    padding: var(--spacing-lg);
 }
 
 .auth-form-wrapper {
-    background-color: #fff;
-    padding: 30px 40px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    background-color: var(--surface-color);
+    padding: var(--spacing-xl) var(--spacing-xl);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--box-shadow);
     width: 100%;
-    max-width: 400px;
+    max-width: 420px; /* Slightly wider for better spacing */
     text-align: center;
 }
 
 .auth-form-wrapper h2 {
-    margin-bottom: 25px;
-    color: #333;
-    font-size: 1.8em;
+    margin-bottom: var(--spacing-lg);
+    color: var(--on-surface-color);
+    font-size: 1.75em; /* Adjusted for balance */
+    font-weight: 600;
 }
 
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: var(--spacing-md);
     text-align: left;
 }
 
 .form-group label {
     display: block;
-    margin-bottom: 8px;
+    margin-bottom: var(--spacing-sm);
     font-weight: 500;
-    color: #555;
+    color: var(--on-surface-secondary-color);
+    font-size: 0.9em;
 }
 
 .form-group input[type="text"],
 .form-group input[type="email"],
 .form-group input[type="password"] {
     width: 100%;
-    padding: 12px 15px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
+    padding: 12px 15px; /* Standardized padding */
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
     font-size: 1em;
-    box-sizing: border-box; /* برای اینکه padding و border در عرض کلی محاسبه شوند */
+    color: var(--on-surface-color);
+    background-color: var(--surface-color);
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
+
 .form-group input:focus {
-    border-color: #007bff;
-    outline: none;
+    border-color: var(--primary-color);
+    outline: 0;
     box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
 }
 
-
 .auth-button {
     width: 100%;
-    padding: 12px;
-    background-color: #007bff; /* رنگ اصلی */
+    padding: 12px 15px;
+    background-color: var(--primary-color);
     color: white;
     border: none;
-    border-radius: 6px;
-    font-size: 1.1em;
-    font-weight: bold;
+    border-radius: var(--border-radius);
+    font-size: 1.05em;
+    font-weight: 600;
     cursor: pointer;
     transition: background-color 0.2s ease;
+    letter-spacing: 0.5px;
 }
 
 .auth-button:hover {
-    background-color: #0056b3;
+    background-color: var(--primary-color-dark);
 }
+
 .auth-button:disabled {
-    background-color: #6c757d;
+    background-color: var(--secondary-color);
+    opacity: 0.65;
     cursor: not-allowed;
 }
 
 .error-message {
-    color: #dc3545; /* رنگ خطا */
-    margin-top: -10px;
-    margin-bottom: 15px;
-    font-size: 0.9em;
+    color: var(--danger-color);
+    margin-top: calc(-1 * var(--spacing-sm) + 5px); /* Adjust for better spacing */
+    margin-bottom: var(--spacing-md);
+    font-size: var(--font-size-sm);
+    text-align: left; /* Align error with field */
 }
 
 .auth-switch-link {
-    margin-top: 20px;
+    margin-top: var(--spacing-lg);
     font-size: 0.95em;
+    color: var(--on-surface-secondary-color);
 }
 
 .auth-switch-link a {
-    color: #007bff;
+    color: var(--primary-color);
     text-decoration: none;
     font-weight: 500;
 }
 
 .auth-switch-link a:hover {
     text-decoration: underline;
+    color: var(--primary-color-dark);
 }

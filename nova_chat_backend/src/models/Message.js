@@ -18,7 +18,7 @@ Message.init(
         },
         senderId: {
             type: DataTypes.UUID,
-            allowNull: true,
+            allowNull: true, // Null for system messages
             // references: { model: 'Users', key: 'id' }
         },
         content: {
@@ -34,7 +34,11 @@ Message.init(
             type: DataTypes.STRING,
             allowNull: true,
         },
-
+        deliveryStatus: { // وضعیت پیام از دید فرستنده
+            type: DataTypes.ENUM('sent', 'delivered', 'read'),
+            allowNull: false, // باید همیشه یک وضعیت داشته باشد
+            defaultValue: 'sent', // پیش‌فرض پس از ذخیره در دیتابیس
+        }
     },
     {
         sequelize,

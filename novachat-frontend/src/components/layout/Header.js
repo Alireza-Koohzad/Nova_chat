@@ -6,7 +6,7 @@ function Header({ user, onLogout }) {
         <header className="app-header">
             <div className="header-logo">NovaChat</div>
             <div className="header-user-info">
-                <span>Welcome, {user.displayName || user.username}</span>
+                <span className="user-display-name">Welcome, {user.displayName || user.username}</span>
                 <button onClick={onLogout} className="logout-button">
                     Logout
                 </button>

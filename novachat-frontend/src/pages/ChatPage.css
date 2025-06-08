@@ -1,14 +1,17 @@
 /* src/pages/ChatPage.css */
 .chat-page-layout {
     display: flex;
-    flex-direction: column; /* Header بالا، بقیه پایین */
+    flex-direction: column;
     height: 100vh;
     width: 100%;
-    overflow: hidden;
+    overflow: hidden; /* Critical for preventing double scrollbars */
+    background-color: var(--background-color);
 }
 
 .chat-page-main-content {
     display: flex;
-    flex-grow: 1; /* فضای باقی مانده پس از هدر را پر می‌کند */
-    overflow: hidden; /* برای اسکرول داخلی Sidebar و ChatWindow */
+    flex-grow: 1;
+    /* Calculate height available after header */
+    height: calc(100vh - var(--header-height));
+    overflow: hidden; /* Ensure children manage their own scroll */
 }

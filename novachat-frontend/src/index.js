@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+// import './styles/global.css'; // Import global styles
 import './index.css'; // می‌توانید یک فایل CSS گلوبال هم داشته باشید
 import App from './App';
 import reportWebVitals from './reportWebVitals';

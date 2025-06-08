@@ -1,62 +1,69 @@
 /* src/components/chat/UserSearch.css */
 .user-search-container {
-    position: relative; /* برای موقعیت‌دهی لیست نتایج */
-    padding: 10px 0;
+    position: relative;
+    /* Padding is now handled by sidebar-header */
 }
 
 .user-search-input {
     width: 100%;
-    padding: 10px 12px;
-    border: 1px solid #ccc;
-    border-radius: 20px; /* گوشه‌های گردتر */
+    padding: 10px 15px; /* Increased padding for better touch targets */
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-pill); /* Pill shape */
     font-size: 0.9em;
-    box-sizing: border-box;
+    background-color: var(--surface-color);
+    color: var(--on-surface-color);
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
 .user-search-input:focus {
     outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 0.1rem rgba(0,123,255,.25);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(var(--primary-color-rgb, 0,123,255),.25); /* Use RGB for transparency */
 }
+/* Add --primary-color-rgb to :root if not already there, e.g. --primary-color-rgb: 0,123,255; */
 
-.search-loading,
-.search-error,
-.no-results-found {
-    padding: 8px 12px;
-    font-size: 0.85em;
-    color: #666;
+
+.search-status-message { /* Generic class for loading, error, no results */
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-sm);
+    color: var(--on-surface-secondary-color);
+    text-align: center; /* Center these messages */
 }
-.search-error { color: #dc3545; }
+.search-status-message.error {
+    color: var(--danger-color);
+}
 
 
 .search-results-list {
     list-style: none;
     padding: 0;
-    margin: 5px 0 0 0;
+    margin: var(--spacing-sm) 0 0 0;
     position: absolute;
     width: 100%;
-    background-color: white;
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    max-height: 200px;
+    background-color: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg); /* Consistent large radius */
+    box-shadow: var(--box-shadow);
+    max-height: 250px; /* Increased max height */
     overflow-y: auto;
-    z-index: 10; /* برای قرار گرفتن روی سایر عناصر */
+    z-index: 100; /* Ensure it's above other sidebar content */
 }
 
 .search-result-item {
-    padding: 10px 12px;
+    padding: var(--spacing-sm) var(--spacing-md);
     cursor: pointer;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--border-color);
     font-size: 0.9em;
+    color: var(--on-surface-color);
+    transition: background-color 0.15s ease-in-out;
 }
-.search-result-item small {
-    color: #777;
-}
-
 .search-result-item:last-child {
     border-bottom: none;
 }
-
 .search-result-item:hover {
-    background-color: #f5f5f5;
+    background-color: #f0f2f5; /* Lighter hover consistent with sidebar items */
+}
+
+.search-result-item small { /* For username display */
+    color: var(--on-surface-secondary-color);
+    margin-left: var(--spacing-xs);
 }

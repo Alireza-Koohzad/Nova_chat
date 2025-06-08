@@ -1,102 +1,126 @@
 /* src/components/chat/MessageItem.css */
 .message-item-wrapper {
     display: flex;
-    margin-bottom: 8px;
-    max-width: 75%; /* حداکثر عرض حباب پیام */
+    margin-bottom: var(--spacing-sm);
+    padding: 0 var(--spacing-xs); /* Small horizontal padding for alignment */
 }
 
 .message-item-wrapper.own-message {
-    align-self: flex-end; /* پیام‌های خودی در سمت راست */
+    justify-content: flex-end; /* Align entire wrapper to the right */
 }
 
 .message-item-wrapper.other-message {
-    align-self: flex-start; /* پیام‌های دیگران در سمت چپ */
+    justify-content: flex-start; /* Align entire wrapper to the left */
 }
 
 .message-bubble {
     padding: 8px 12px;
-    border-radius: 18px; /* گردی بیشتر */
-    word-wrap: break-word; /* شکستن کلمات طولانی */
-    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+    border-radius: var(--border-radius-lg); /* Softer, larger radius */
+    max-width: 75%; /* Max width of bubble */
+    word-wrap: break-word;
+    box-shadow: var(--box-shadow-sm);
+    position: relative; /* For potential future "tail" pseudo-elements */
+    line-height: 1.4; /* Improve readability */
 }
 
 .own-message .message-bubble {
-    background-color: #dcf8c6; /* رنگ سبز روشن شبیه واتس‌اپ */
-    border-bottom-right-radius: 4px; /* برای ایجاد حالت "دم" */
+    background-color: var(--chat-bubble-own-bg);
+    color: #1f2c33; /* Darker text on light green for better contrast */
+    border-bottom-right-radius: var(--border-radius-sm); /* "Tail" effect */
 }
 
 .other-message .message-bubble {
-    background-color: #ffffff; /* سفید برای پیام‌های دریافتی */
-    border-bottom-left-radius: 4px;
+    background-color: var(--chat-bubble-other-bg);
+    color: var(--on-surface-color);
+    border-bottom-left-radius: var(--border-radius-sm); /* "Tail" effect */
 }
 
 .message-sender-name {
-    font-size: 0.8em;
-    font-weight: 500;
-    color: #007bff; /* یا رنگ دلخواه */
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: var(--primary-color); /* Or a distinct color for sender names */
     margin-bottom: 3px;
+    display: block; /* Ensure it's on its own line */
 }
+/* Hide sender name for own messages by default if desired */
+.own-message .message-sender-name {
+    display: none;
+}
+
 
 .message-content {
     font-size: 0.95em;
-    line-height: 1.4;
-    white-space: pre-wrap; /* برای حفظ فاصله‌ها و خطوط جدید */
+    white-space: pre-wrap; /* Preserve whitespace and newlines */
+    /* Links within messages */
 }
+.message-content a {
+    color: var(--primary-color-dark);
+    text-decoration: underline;
+}
+.message-content a:hover {
+    text-decoration: none;
+}
+
 
 .message-meta {
     font-size: 0.75em;
-    color: #888;
-    margin-top: 5px;
-    text-align: right; /* زمان و تیک‌ها در سمت راست حباب */
+    color: var(--on-surface-secondary-color);
+    margin-top: var(--spacing-xs);
+    text-align: right;
     display: flex;
     align-items: center;
-    justify-content: flex-end; /* برای چسباندن به راست */
+    justify-content: flex-end;
+    height: 16px; /* Fixed height for meta for alignment */
+}
+.own-message .message-meta {
+    color: #667781; /* Slightly different meta color for own messages, common in apps */
 }
 .other-message .message-meta {
-    /* برای پیام های دریافتی، زمان می تواند سمت چپ باشد یا همان راست بماند */
-    justify-content: flex-start;
+   justify-content: flex-end; /* Keep time on the right for other messages too, or flex-start if preferred */
 }
-
 
 .message-timestamp {
-    margin-right: 5px;
+    margin-right: 4px;
 }
 
-.ticks {
-    font-weight: bold;
+.message-ticks {
+    font-size: 1em; /* Make ticks slightly larger relative to meta text */
+    line-height: 1;
+    display: inline-flex; /* For better alignment of potential SVG icons */
+    align-items: center;
 }
-.ticks.sending { color: #aaa; } /* ساعت */
-.ticks.sent { color: #777; } /* تک تیک خاکستری */
-.ticks.delivered { color: #555; } /* دو تیک خاکستری */
-.ticks.read { color: #34b7f1; } /* دو تیک آبی */
-.message-ticks { /* تغییر نام از .ticks */
-    font-weight: bold;
-    margin-left: 4px; /* کمی فاصله از زمان */
+.message-ticks svg { /* If using SVG icons for ticks */
+    width: 16px;
+    height: 16px;
 }
-.message-ticks.sending { color: #aaa; }
-.message-ticks.sent { color: #777; }
-.message-ticks.delivered { color: #555; }
-.message-ticks.read { color: #34b7f1; } /* آبی */
+
+.message-ticks.sending { color: #a0a0a0; }
+.message-ticks.sent { color: #808080; }
+.message-ticks.delivered { color: #606060; }
+.message-ticks.read { color: #34b7f1; } /* WhatsApp blue for read ticks */
 
 
+/* System Message Styling */
 .system-message-wrapper {
-    align-self: center; /* در وسط چت */
-    margin: 10px 0;
-    max-width: 80%; /* یا عرض دلخواه */
+    align-self: center;
+    margin: var(--spacing-md) 0;
+    max-width: 85%;
 }
 
 .system-message-content {
-    background-color: #e1f5fe; /* یک رنگ ملایم برای پیام سیستمی */
-    color: #01579b;
-    padding: 6px 10px;
-    border-radius: 10px;
-    font-size: 0.85em;
+    background-color: #e2f0fe; /* Lighter, softer blue for system messages */
+    color: #0056b3; /* Darker blue text for contrast */
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--border-radius-pill); /* Pill shape */
+    font-size: var(--font-size-sm);
     text-align: center;
-    box-shadow: 0 1px 1px rgba(0,0,0,0.05);
+    box-shadow: none; /* No shadow for system messages */
+    line-height: 1.3;
 }
+/* Timestamp within system message (optional) */
 .system-message-content .system-timestamp {
-    display: block; /* یا inline-block با margin */
-    font-size: 0.8em; /* کوچکتر از متن اصلی */
-    color: #0277bd; /* کمی تیره‌تر */
-    margin-top: 3px;
+    display: block;
+    font-size: 0.8em;
+    color: #004085; /* Even darker blue */
+    margin-top: 2px;
 }

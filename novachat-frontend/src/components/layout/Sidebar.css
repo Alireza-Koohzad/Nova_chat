@@ -1,144 +1,185 @@
 /* src/components/layout/Sidebar.css */
 .sidebar-container {
-    width: 300px; /* یا درصد */
-    min-width: 250px;
-    background-color: #ffffff;
-    border-right: 1px solid #e0e0e0;
+    width: var(--sidebar-width);
+    min-width: 280px; /* Slightly increased min-width */
+    max-width: 35%; /* Allow some flexibility */
+    background-color: var(--surface-color);
+    border-right: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
+    height: 100%; /* Fill parent height */
+    overflow-y: hidden; /* Parent handles scroll if needed, children will scroll */
 }
 
 .sidebar-header {
-    padding: 15px;
-    border-bottom: 1px solid #e0e0e0;
-    background-color: #f5f5f5;
+    padding: var(--spacing-sm); /* Consistent padding */
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--chat-header-bg); /* Match chat header bg */
+    flex-shrink: 0; /* Prevent shrinking */
 }
-.sidebar-header h3 {
-    margin: 0;
-    font-size: 1.2em;
+/* UserSearch specific styling moved to UserSearch.css, but ensure it fits here */
+.sidebar-header .user-search-container {
+    padding: var(--spacing-xs) 0; /* Remove UserSearch's own padding */
+}
+
+
+.chat-list-wrapper { /* Added wrapper for scrolling */
+    flex-grow: 1;
+    overflow-y: auto;
 }
 
 .chat-list {
     list-style: none;
     padding: 0;
     margin: 0;
-    flex-grow: 1;
 }
 
 .chat-list-item {
     display: flex;
     align-items: center;
-    padding: 12px 15px;
+    padding: var(--spacing-sm) var(--spacing-md);
     cursor: pointer;
-    border-bottom: 1px solid #f0f0f0;
-    transition: background-color 0.2s ease;
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.15s ease-in-out;
+    min-height: 72px; /* Ensure consistent height */
+}
+
+.chat-list-item:last-child {
+    border-bottom: none;
 }
 
 .chat-list-item:hover {
-    background-color: #f5f5f5;
+    background-color: #f0f2f5; /* Lighter hover */
 }
 .chat-list-item.active {
-    background-color: #e0f7fa; /* یک رنگ برای چت فعال */
+    background-color: #e6f2ff; /* Softer active color */
+    border-right: 3px solid var(--primary-color); /* Active indicator */
 }
 
 
+.chat-item-avatar-wrapper { /* Wrapper for avatar and status dot */
+    position: relative;
+    margin-right: var(--spacing-md);
+    flex-shrink: 0;
+}
+
 .chat-item-avatar {
-    width: 40px;
-    height: 40px;
+    width: 48px; /* Slightly larger avatars */
+    height: 48px;
     border-radius: 50%;
-    background-color: #bdbdbd;
+    background-color: var(--secondary-color);
     color: white;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-weight: bold;
-    margin-right: 12px;
-    position: relative;
+    font-weight: 600; /* Bolder initial */
+    font-size: 1.2em;
+    overflow: hidden; /* Clip image if it's not perfectly round */
 }
-.avatar-placeholder { /* برای نمایش حرف اول نام */ }
-
-.status-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    border: 2px solid white;
-}
-.status-dot.online { background-color: #4caf50; }
-.status-dot.offline { background-color: #9e9e9e; } /* (اختیاری) */
-
-
-.chat-item-info {
-    flex-grow: 1;
-    overflow: hidden; /* برای اینکه متن طولانی ... شود */
-}
-
-.chat-name {
-    font-weight: 500;
-    display: block;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.last-message {
-    font-size: 0.9em;
-    color: #757575;
-    margin: 2px 0 0 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.unread-badge {
-    background-color: #f44336;
-    color: white;
-    font-size: 0.75em;
-    padding: 2px 6px;
-    border-radius: 10px;
-    font-weight: bold;
-    margin-left: auto; /* برای قرار گرفتن در سمت راست */
-}
-
-.sidebar-loading, .sidebar-error, .no-chats {
-    padding: 20px;
-    text-align: center;
-    color: #757575;
-}
-.chat-item-avatar-wrapper .chat-item-avatar svg { /* برای آیکون گروه */
-    width: 20px; /* یا اندازه دلخواه */
-    height: 20px;
-}
-.member-count {
-    font-size: 0.75em;
-    color: #888;
-    margin-left: 5px;
-}
-
-
 .chat-item-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: 50%; /* برای اینکه تصویر هم گرد باشد */
 }
-.member-count {
-    font-size: 0.75em;
-    color: #888;
-    margin-left: 0; /* یا مقداری برای فاصله از نام */
-    display: block; /* برای اینکه زیر نام قرار گیرد */
+.chat-item-avatar svg { /* For group icon */
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
+
+
+.status-dot {
+    width: 12px; /* Slightly larger status dot */
+    height: 12px;
+    border-radius: 50%;
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    border: 2px solid var(--surface-color); /* Match sidebar background */
+    box-sizing: border-box;
+}
+.status-dot.online { background-color: var(--online-status-color); }
+/* .status-dot.offline { background-color: var(--offline-status-color); } */
+
+
+.chat-item-info {
+    flex-grow: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.chat-name-unread-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+}
+
+.chat-name {
+    font-weight: 500;
+    color: var(--on-surface-color);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-size: 0.95em; /* Slightly adjusted */
 }
-.last-message-prefix { /* برای "You: " */
-    font-weight: 500; /* یا هر استایل دلخواه */
+
+.unread-badge {
+    background-color: var(--primary-color); /* Use primary color for unread */
+    color: white;
+    font-size: 0.7em; /* Smaller badge */
+    padding: 3px 7px;
+    border-radius: var(--border-radius-pill);
+    font-weight: bold;
+    line-height: 1;
+    flex-shrink: 0; /* Don't shrink badge */
+    margin-left: var(--spacing-sm);
 }
-.sidebar-status-message.error .retry-button {
-    margin-left: 10px;
-    padding: 5px 10px;
-    font-size: 0.9em;
+
+.last-message-preview, .member-count {
+    font-size: var(--font-size-sm);
+    color: var(--on-surface-secondary-color);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+}
+.last-message-prefix {
+    font-weight: 500;
+}
+.member-count {
+    font-style: italic;
+}
+
+
+.sidebar-status-message {
+    padding: var(--spacing-lg);
+    text-align: center;
+    color: var(--on-surface-secondary-color);
+    font-style: italic;
+}
+.sidebar-status-message.error {
+    color: var(--danger-color);
+}
+.sidebar-status-message .retry-button {
+    margin-left: var(--spacing-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    font-size: var(--font-size-sm);
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius-sm);
+}
+.sidebar-status-message .retry-button:hover {
+    background-color: var(--primary-color-dark);
+}
+
+.no-chats-message {
+    padding: var(--spacing-lg);
+    text-align: center;
+    color: var(--on-surface-secondary-color);
+    font-style: italic;
 }
